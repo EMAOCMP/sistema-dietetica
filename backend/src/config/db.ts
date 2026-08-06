@@ -6,11 +6,10 @@ dotenv.config();
 
 // Creamos el "Pool" de conexiones usando los datos de tu .env
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT) || 5432,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // Esto es obligatorio para conectarse a Neon
+  }
 });
 
 // Mensaje para avisarnos en la consola cuando se conecte bien
