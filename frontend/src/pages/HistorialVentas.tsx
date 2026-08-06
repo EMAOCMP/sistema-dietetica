@@ -16,7 +16,7 @@ export default function HistorialVentas() {
   const cargarVentas = async () => {
     try {
       const token = localStorage.getItem('token');
-      const respuesta = await axios.get('http://localhost:3000/api/ventas', { headers: { Authorization: `Bearer ${token}` } });
+      const respuesta = await axios.get('https://dietetica-backend-pkmn.onrender.com/api/ventas', { headers: { Authorization: `Bearer ${token}` } });
       setVentas(respuesta.data);
       setCargando(false);
     } catch (err) { console.error(err); setCargando(false); }

@@ -15,7 +15,7 @@ export default function Caja() {
   const cargarProductos = async () => {
     try {
       const token = localStorage.getItem('token');
-      const respuesta = await axios.get('http://localhost:3000/api/productos', { headers: { Authorization: `Bearer ${token}` } });
+      const respuesta = await axios.get('https://dietetica-backend-pkmn.onrender.com/api/productos', { headers: { Authorization: `Bearer ${token}` } });
       setProductos(respuesta.data);
     } catch (err) { console.error(err); }
   };
@@ -41,7 +41,7 @@ export default function Caja() {
     if (carrito.length === 0) return alert("El carrito está vacío");
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:3000/api/ventas', { usuario_id: 1, total: totalFactura, detalles: carrito }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post('https://dietetica-backend-pkmn.onrender.com/api/ventas', { usuario_id: 1, total: totalFactura, detalles: carrito }, { headers: { Authorization: `Bearer ${token}` } });
       alert("✅ ¡Venta registrada con éxito!");
       setCarrito([]); cargarProductos(); 
     } catch (err) { alert("❌ Error al procesar la venta."); }

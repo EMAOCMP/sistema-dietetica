@@ -16,7 +16,7 @@ export default function Dashboard() {
   const cargarProductos = async () => {
     try {
       const token = localStorage.getItem('token');
-      const respuesta = await axios.get('http://localhost:3000/api/productos', { headers: { Authorization: `Bearer ${token}` } });
+      const respuesta = await axios.get('https://dietetica-backend-pkmn.onrender.com/api/productos', { headers: { Authorization: `Bearer ${token}` } });
       setProductos(respuesta.data);
       setCargando(false);
     } catch (err) { console.error(err); setCargando(false); }
@@ -42,9 +42,9 @@ export default function Dashboard() {
       const token = localStorage.getItem('token');
       const config = { headers: { Authorization: `Bearer ${token}` } };
       if (modoEdicion) {
-        await axios.put(`http://localhost:3000/api/productos/${productoForm.id}`, productoForm, config);
+        await axios.put(`https://dietetica-backend-pkmn.onrender.com/api/productos/${productoForm.id}`, productoForm, config);
       } else {
-        await axios.post('http://localhost:3000/api/productos', productoForm, config);
+        await axios.post('https://dietetica-backend-pkmn.onrender.com/api/productos', productoForm, config);
       }
       setMostrarModal(false);
       cargarProductos();
@@ -56,7 +56,7 @@ export default function Dashboard() {
     if (!confirmar) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3000/api/productos/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`https://dietetica-backend-pkmn.onrender.com/api/productos/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       cargarProductos(); 
     } catch (err) { alert("Error al eliminar el producto"); }
   };

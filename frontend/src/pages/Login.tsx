@@ -15,7 +15,7 @@ export default function Login() {
     setMensaje('⏳ Comprobando credenciales...');
     
     try {
-      const respuesta = await axios.post('http://localhost:3000/api/auth/login', {
+      const respuesta = await axios.post('https://dietetica-backend-pkmn.onrender.com/api/auth/login', {
         email,
         password
       });
