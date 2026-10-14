@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 export default defineConfig({
+  envPrefix: ['VITE_', 'SUPABASE_'],
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',

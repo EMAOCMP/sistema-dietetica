@@ -40,7 +40,7 @@ Estructura de la infraestructura para probar la app desde el celular con datos r
 | **Celular** `moto-g52` | Cliente de pruebas | Android, IP tailnet `100.107.64.7` |
 | **Tailscale** | Red privada PC ↔ celular, sin exponer puertos | v1.102.4, `C:\Program Files\Tailscale\tailscale.exe` |
 | **GitHub** | Identidad de login de Tailscale | `emaocmp.github` (no usa repositorio propio) |
-| **Supabase** | Base de datos en la nube | `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` en `.env.local` |
+| **Supabase** | Base de datos en la nube | `SUPABASE_URL` + `SUPABASE_ANON_KEY` en `.env.local` |
 
 ---
 

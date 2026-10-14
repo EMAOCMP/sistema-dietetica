@@ -22,6 +22,8 @@ if ((process.env.DV_SSL_KEY || process.env.DV_SSL_CERT) && !useCustomCert) {
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Expone al bundle del cliente las variables que empiezan por VITE_ o SUPABASE_
+  envPrefix: ['VITE_', 'SUPABASE_'],
   plugins: [
     ...(useCustomCert ? [] : useHttps ? [basicSsl()] : []),
     react(),
