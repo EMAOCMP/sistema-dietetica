@@ -1,0 +1,306 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="Plus Jakarta Sans, Inter, Segoe UI, sans-serif">
+<defs>
+  <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4338CA"/>
+  </linearGradient>
+  <linearGradient id="avatarGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F97316"/><stop offset="1" stop-color="#4F46E5"/>
+  </linearGradient>
+</defs>
+<rect width="1440" height="900" fill="#09090B"/>
+<g id="Sidebar">
+  <rect width="240" height="900" fill="#0C0C0F"/>
+  <path d="M240 0V900" stroke="#27272A"/>
+  <rect x="20" y="20" width="36" height="36" rx="12" fill="url(#brandGrad)"/>
+  <path d="M28 48c0-9 7-16 16-16 0 9-7 16-16 16z" fill="#fff"/>
+  <path d="M28 48L44 32" stroke="#4338CA" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="66" y="35" font-size="13.5" font-weight="800" fill="#F4F4F5">Dietética</text>
+  <text x="66" y="52" font-size="13.5" font-weight="800" fill="#6366F1">Vishal</text>
+  <g transform="translate(12,88)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none">
+      <rect x="0" y="0" width="7.5" height="7.5" rx="2"/><rect x="10" y="0" width="7.5" height="7.5" rx="2"/>
+      <rect x="0" y="10" width="7.5" height="7.5" rx="2"/><rect x="10" y="10" width="7.5" height="7.5" rx="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Panel Principal</text>
+  </g>
+  <g transform="translate(12,134)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 2h2.6l1.6 8.5h7.6l1.6-6.5H4.2"/><circle cx="6" cy="14" r="1.7"/><circle cx="12" cy="14" r="1.7"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Venta Rápida (POS)</text>
+  </g>
+  <g transform="translate(12,180)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <path d="M9 0l8 4.5v9L9 18l-8-4.5v-9z"/><path d="M1 4.5L9 9l8-4.5M9 9v9"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Productos / Stock</text>
+    <rect x="176" y="11" width="30" height="18" rx="9" fill="#EF4444"/>
+    <text x="191" y="24" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">12</text>
+  </g>
+  <g transform="translate(12,226)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <rect x="0" y="3" width="10" height="9" rx="1.5"/><path d="M10 6h4l3.5 3.5V12H10z"/>
+      <circle cx="5" cy="14.5" r="2"/><circle cx="13.5" cy="14.5" r="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Ingreso Mercadería</text>
+  </g>
+  <g transform="translate(12,272)">
+    <rect width="216" height="40" rx="10" fill="#6366F1" fill-opacity="0.14"/>
+    <rect width="3" height="20" y="10" rx="1.5" fill="#6366F1"/>
+    <g transform="translate(15,11)" stroke="#A5B4FC" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="8"/><path d="M9 4.5V9l3.6 2.2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="700" fill="#C7D2FE">Pedidos &amp; Historial</text>
+  </g>
+  <g transform="translate(12,318)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 14l5-5 3.5 3L17 2"/><path d="M12 2h5v5"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Mi actividad</text>
+  </g>
+  <g transform="translate(12,364)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="7" cy="6" r="3.5"/><path d="M1 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+      <path d="M13.2 3.6a3.4 3.4 0 0 1 0 6.4"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Usuarios y Actividad</text>
+  </g>
+  <path d="M20 430H220" stroke="#27272A"/>
+  <g transform="translate(12,820)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="3.5"/>
+      <path d="M9 0v3M9 15v3M0 9h3M15 9h3M2.6 2.6l2.1 2.1M13.3 13.3l2.1 2.1M15.4 2.6l-2.1 2.1M4.7 13.3l-2.1 2.1"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Configuración</text>
+  </g>
+</g>
+<g id="Header">
+  <rect x="240" width="1200" height="64" fill="#18181B"/>
+  <path d="M240 64.5H1440" stroke="#27272A"/>
+  <rect x="256" y="16" width="32" height="32" rx="10" fill="#27272A"/>
+  <g stroke="#A1A1AA" stroke-width="1.7" fill="none"><rect x="264" y="24" width="16" height="16" rx="3"/><path d="M270 24v16"/></g>
+  <rect x="304" y="14" width="420" height="36" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+  <g stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="324" cy="30" r="5.5"/><path d="M328.5 34.5l4 4"/></g>
+  <text x="344" y="36" font-size="13" fill="#52525B">Buscar productos, ventas, clientes...</text>
+  <rect x="676" y="22" width="40" height="20" rx="6" fill="#18181B" stroke="#3F3F46"/>
+  <text x="696" y="36" font-size="10" font-weight="700" fill="#71717A" text-anchor="middle" font-family="monospace">&#8984;K</text>
+  <g transform="translate(1228,20)" stroke="#A1A1AA" stroke-width="1.6" fill="none" stroke-linejoin="round">
+    <path d="M6.5 2a5 5 0 0 0-5 5v4l-1.5 3h13L11.5 11V7a5 5 0 0 0-5-5z"/>
+    <path d="M5.2 16.4a1.9 1.9 0 0 0 3.1 0"/>
+  </g>
+  <circle cx="1238" cy="22" r="4.5" fill="#EF4444"/>
+  <path d="M1268 16v32" stroke="#27272A"/>
+  <circle cx="1302" cy="32" r="16" fill="#27272A"/>
+  <g stroke="#FBBF24" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <circle cx="1302" cy="32" r="4.5"/><path d="M1302 22v3M1302 39v3M1292 32h3M1309 32h3M1295 25l2 2M1307 37l2 2M1309 25l-2 2M1297 37l-2 2"/>
+  </g>
+  <circle cx="1350" cy="32" r="16" fill="url(#avatarGrad)"/>
+  <text x="1350" y="37" font-size="13" font-weight="800" fill="#fff" text-anchor="middle">E</text>
+  <text x="1374" y="29" font-size="12" font-weight="700" fill="#F4F4F5">Emiliano</text>
+  <text x="1374" y="44" font-size="9" font-weight="700" fill="#71717A" letter-spacing="1">ADMIN</text>
+</g>
+<g id="Content">
+  <text x="264" y="112" font-size="24" font-weight="800" fill="#F4F4F5">Historial y Trazabilidad</text>
+  <text x="264" y="136" font-size="13" fill="#71717A">Comprobantes internos y facturas ARCA · clic en una fila para ver el detalle</text>
+  <rect x="830" y="96" width="220" height="36" rx="12" fill="#18181B" stroke="#27272A"/>
+  <rect x="834" y="100" width="52" height="28" rx="9" fill="#6366F1"/>
+  <text x="860" y="119" font-size="11.5" font-weight="800" fill="#fff" text-anchor="middle">Hoy</text>
+  <text x="914" y="119" font-size="11.5" font-weight="700" fill="#71717A" text-anchor="middle">Semana</text>
+  <text x="977" y="119" font-size="11.5" font-weight="700" fill="#71717A" text-anchor="middle">Mes</text>
+  <text x="1026" y="119" font-size="11.5" font-weight="700" fill="#71717A" text-anchor="middle">Todo</text>
+  <rect x="1062" y="96" width="100" height="36" rx="12" fill="#F4F4F5"/>
+  <text x="1112" y="119" font-size="12" font-weight="800" fill="#09090B" text-anchor="middle">↓ Exportar</text>
+  <rect x="1174" y="96" width="130" height="36" rx="12" fill="#3B82F6"/>
+  <text x="1239" y="119" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">Para contador</text>
+  <rect x="1316" y="96" width="100" height="36" rx="12" fill="#10B981"/>
+  <text x="1366" y="119" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">Actualizar</text>
+  <g id="KPI-Ventas" transform="translate(264,164)">
+    <rect width="376" height="96" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="20" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">VENTAS (FILTRO)</text>
+    <text x="20" y="72" font-size="28" font-weight="800" fill="#F4F4F5">128</text>
+    <rect x="90" y="52" width="96" height="22" rx="7" fill="#10B981" fill-opacity="0.15"/>
+    <text x="100" y="67" font-size="11" font-weight="800" fill="#10B981">hoy · 00:00</text>
+    <circle cx="342" cy="48" r="18" fill="#6366F1" fill-opacity="0.15"/>
+    <g transform="translate(333,39)" stroke="#818CF8" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="9" r="8"/><path d="M9 4.5V9l3.6 2.2"/>
+    </g>
+  </g>
+  <g id="KPI-Facturacion" transform="translate(652,164)">
+    <rect width="376" height="96" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="20" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">FACTURACIÓN</text>
+    <text x="20" y="72" font-size="28" font-weight="800" fill="#F4F4F5">$1.284.500</text>
+    <circle cx="342" cy="48" r="18" fill="#10B981" fill-opacity="0.15"/>
+    <g transform="translate(333,39)" stroke="#34D399" stroke-width="1.7" fill="none">
+      <path d="M2 4h14v10H2z"/><path d="M2 7h14M6 11h3"/>
+    </g>
+  </g>
+  <g id="KPI-Ganancia" transform="translate(1040,164)">
+    <rect width="376" height="96" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="20" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">GANANCIA</text>
+    <text x="20" y="72" font-size="28" font-weight="800" fill="#10B981">$386.320</text>
+    <circle cx="342" cy="48" r="18" fill="#F97316" fill-opacity="0.15"/>
+    <g transform="translate(333,39)" stroke="#FB923C" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 14l5-5 3.5 3L17 2"/><path d="M12 2h5v5"/>
+    </g>
+  </g>
+  <g id="Filtros" transform="translate(264,276)">
+    <rect width="1152" height="76" rx="16" fill="#18181B" stroke="#27272A"/>
+    <g transform="translate(20,30)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 1h16l-6 7v6l-4 2V8z"/>
+    </g>
+    <text x="46" y="43" font-size="11" font-weight="800" fill="#A1A1AA" letter-spacing="1">FILTROS</text>
+    <rect x="118" y="28" width="74" height="20" rx="10" fill="#6366F1"/>
+    <text x="155" y="42" font-size="10.5" font-weight="800" fill="#fff" text-anchor="middle">2 activos</text>
+    <rect x="206" y="20" width="230" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <g stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="226" cy="36" r="5.5"/><path d="M230.5 40.5l4 4"/></g>
+    <text x="246" y="41" font-size="12" fill="#52525B">N° ticket o cliente...</text>
+    <rect x="446" y="20" width="120" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <text x="460" y="41" font-size="11.5" fill="#A1A1AA">Vendedor</text>
+    <path d="M548 34l4 4 4-4" stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <rect x="576" y="20" width="110" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <text x="590" y="41" font-size="11.5" fill="#A1A1AA">Pago</text>
+    <path d="M668 34l4 4 4-4" stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <rect x="694" y="20" width="110" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <text x="708" y="41" font-size="11.5" fill="#A1A1AA">Tipo</text>
+    <path d="M786 34l4 4 4-4" stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <rect x="812" y="20" width="110" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <text x="826" y="41" font-size="11.5" fill="#A1A1AA">Despacho</text>
+    <path d="M904 34l4 4 4-4" stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <rect x="930" y="20" width="110" height="36" rx="11" fill="#0C0C0F" stroke="#27272A"/>
+    <text x="944" y="41" font-size="11.5" fill="#A1A1AA">Estado</text>
+    <path d="M1022 34l4 4 4-4" stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <text x="1132" y="42" font-size="11.5" font-weight="700" fill="#52525B" text-anchor="end">Limpiar todo ✕</text>
+  </g>
+  <g id="Tabla" transform="translate(264,372)">
+    <rect width="1152" height="508" rx="16" fill="#18181B" stroke="#27272A"/>
+    <g font-size="10.5" font-weight="800" fill="#52525B" letter-spacing="0.8">
+      <text x="20" y="34">ID / FECHA</text><text x="206" y="34">CLIENTE</text><text x="366" y="34">VENDEDOR</text>
+      <text x="506" y="34">PAGO / DESPACHO</text><text x="686" y="34">TIPO / ESTADO</text>
+      <text x="926" y="34" text-anchor="end">TOTAL</text><text x="1132" y="34" text-anchor="end">ACCIONES</text>
+    </g>
+    <path d="M20 44H1132" stroke="#27272A"/>
+    <g transform="translate(0,44)" font-size="12.5">
+      <text x="20" y="24" fill="#F4F4F5" font-weight="700">#A4F29C1B</text>
+      <text x="20" y="40" font-size="10.5" fill="#71717A">04/10/2026 12:41</text>
+      <text x="206" y="30" fill="#F4F4F5" font-weight="700">María López</text>
+      <text x="366" y="30" fill="#A1A1AA">Emiliano</text>
+      <rect x="506" y="17" width="76" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="544" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">EFECTIVO</text>
+      <rect x="588" y="17" width="58" height="18" rx="6" fill="#27272A"/><text x="617" y="30" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">LOCAL</text>
+      <rect x="686" y="17" width="52" height="18" rx="6" fill="#3B82F6" fill-opacity="0.18"/><text x="712" y="30" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">ARCA</text>
+      <rect x="744" y="17" width="36" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="762" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">OK</text>
+      <text x="926" y="30" fill="#F4F4F5" font-weight="800" text-anchor="end">$12.450,00</text>
+      <rect x="950" y="15" width="86" height="26" rx="9" fill="#27272A"/><text x="993" y="32" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Detalle ⌄</text>
+      <rect x="1046" y="15" width="86" height="26" rx="9" fill="#EF4444" fill-opacity="0.14"/><text x="1089" y="32" font-size="11" font-weight="800" fill="#F87171" text-anchor="middle">Anular</text>
+    </g>
+    <path d="M20 98H1132" stroke="#18181B"/>
+    <g transform="translate(0,98)" font-size="12.5">
+      <text x="20" y="24" fill="#F4F4F5" font-weight="700">#A4F29C0A</text>
+      <text x="20" y="40" font-size="10.5" fill="#71717A">04/10/2026 11:58</text>
+      <text x="206" y="30" fill="#F4F4F5" font-weight="700">Sin nombre</text>
+      <text x="366" y="30" fill="#A1A1AA">Carla Ruiz</text>
+      <rect x="506" y="17" width="94" height="18" rx="6" fill="#3B82F6" fill-opacity="0.16"/><text x="553" y="30" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">TRANSFERENCIA</text>
+      <rect x="606" y="17" width="60" height="18" rx="6" fill="#F97316" fill-opacity="0.18"/><text x="636" y="30" font-size="9.5" font-weight="800" fill="#FB923C" text-anchor="middle">ENVÍO</text>
+      <rect x="686" y="17" width="66" height="18" rx="6" fill="#27272A"/><text x="719" y="30" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">INTERNO</text>
+      <rect x="758" y="17" width="36" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="776" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">OK</text>
+      <text x="926" y="30" fill="#F4F4F5" font-weight="800" text-anchor="end">$8.990,00</text>
+      <rect x="950" y="15" width="86" height="26" rx="9" fill="#27272A"/><text x="993" y="32" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Detalle ⌄</text>
+      <rect x="1046" y="15" width="86" height="26" rx="9" fill="#EF4444" fill-opacity="0.14"/><text x="1089" y="32" font-size="11" font-weight="800" fill="#F87171" text-anchor="middle">Anular</text>
+    </g>
+    <path d="M20 152H1132" stroke="#18181B"/>
+    <g transform="translate(0,152)">
+      <rect x="0" y="0" width="1152" height="170" rx="12" fill="#0C0C0F"/>
+      <rect x="0" y="0" width="3" height="170" rx="1.5" fill="#6366F1"/>
+      <g font-size="12.5">
+        <text x="20" y="26" fill="#F4F4F5" font-weight="700">N° 0001-000042</text>
+        <text x="20" y="42" font-size="10.5" fill="#818CF8">04/10/2026 10:32 · expandida</text>
+        <text x="206" y="32" fill="#F4F4F5" font-weight="700">Juan Pérez</text>
+        <text x="366" y="32" fill="#A1A1AA">Emiliano</text>
+        <rect x="506" y="19" width="70" height="18" rx="6" fill="#3B82F6" fill-opacity="0.16"/><text x="541" y="32" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">TARJETA</text>
+        <rect x="582" y="19" width="58" height="18" rx="6" fill="#27272A"/><text x="611" y="32" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">LOCAL</text>
+        <rect x="686" y="19" width="52" height="18" rx="6" fill="#3B82F6" fill-opacity="0.18"/><text x="712" y="32" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">ARCA</text>
+        <rect x="744" y="19" width="36" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="762" y="32" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">OK</text>
+        <text x="926" y="32" fill="#F4F4F5" font-weight="800" text-anchor="end">$23.150,00</text>
+        <rect x="950" y="17" width="86" height="26" rx="9" fill="#6366F1"/><text x="993" y="34" font-size="11" font-weight="800" fill="#fff" text-anchor="middle">Detalle ⌃</text>
+        <rect x="1046" y="17" width="86" height="26" rx="9" fill="#EF4444" fill-opacity="0.14"/><text x="1089" y="34" font-size="11" font-weight="800" fill="#F87171" text-anchor="middle">Anular</text>
+      </g>
+      <path d="M20 56H1132" stroke="#27272A"/>
+      <text x="20" y="76" font-size="10" font-weight="800" fill="#52525B" letter-spacing="1">TRAZABILIDAD · ÍTEMS</text>
+      <g font-size="12">
+        <text x="20" y="98" fill="#F4F4F5" font-weight="700">Aceite Natura 900ml <tspan fill="#71717A" font-weight="500">× 2 @ $4.350,00</tspan></text>
+        <text x="700" y="98" fill="#F4F4F5" font-weight="800" text-anchor="end">$8.700,00</text>
+        <text x="20" y="118" fill="#F4F4F5" font-weight="700">Arroz Gallo 1kg <tspan fill="#71717A" font-weight="500">× 3 @ $2.640,00</tspan></text>
+        <text x="700" y="118" fill="#F4F4F5" font-weight="800" text-anchor="end">$7.920,00</text>
+        <text x="20" y="138" fill="#F4F4F5" font-weight="700">Yerba Playadito 1kg <tspan fill="#71717A" font-weight="500">× 1 @ $6.530,00</tspan></text>
+        <text x="700" y="138" fill="#F4F4F5" font-weight="800" text-anchor="end">$6.530,00</text>
+      </g>
+      <text x="20" y="160" font-size="11" fill="#71717A">Vendedor: <tspan fill="#A1A1AA" font-weight="700">Emiliano</tspan> · Pago: <tspan fill="#A1A1AA" font-weight="700">Tarjeta</tspan> · Despacho: <tspan fill="#A1A1AA" font-weight="700">Local</tspan> · Ganancia est.: <tspan fill="#10B981" font-weight="800">$6.410,00</tspan></text>
+      <rect x="740" y="60" width="392" height="94" rx="12" fill="#10B981" fill-opacity="0.08" stroke="#10B981" stroke-opacity="0.3"/>
+      <g transform="translate(756,74)" fill="#10B981">
+        <circle cx="7" cy="7" r="7"/><path d="M4.6 10.8L3.5 12l.4-1.7A5.4 5.4 0 1 1 7 12.4a5.3 5.3 0 0 1-2.4-.6z" fill="#0C0C0F"/>
+      </g>
+      <text x="778" y="86" font-size="11.5" font-weight="800" fill="#34D399">Reenviar comprobante</text>
+      <rect x="756" y="96" width="180" height="28" rx="9" fill="#0C0C0F" stroke="#27272A"/>
+      <text x="770" y="114" font-size="11.5" fill="#52525B" font-family="monospace">5491123456789</text>
+      <rect x="946" y="96" width="86" height="28" rx="9" fill="#10B981"/>
+      <text x="989" y="114" font-size="11" font-weight="800" fill="#fff" text-anchor="middle">WhatsApp</text>
+      <rect x="1040" y="96" width="44" height="28" rx="9" fill="#27272A"/>
+      <text x="1062" y="114" font-size="11" font-weight="800" fill="#A1A1AA" text-anchor="middle">Copiar</text>
+      <rect x="756" y="130" width="76" height="20" rx="7" fill="#18181B" stroke="#27272A"/>
+      <text x="794" y="144" font-size="10.5" font-weight="700" fill="#71717A" text-anchor="middle">Imprimir</text>
+      <text x="844" y="144" font-size="10" fill="#52525B">Se abre WhatsApp con el ticket listo.</text>
+    </g>
+    <path d="M20 322H1132" stroke="#18181B"/>
+    <g transform="translate(0,322)" font-size="12.5">
+      <text x="20" y="24" fill="#F4F4F5" font-weight="700">#A4F29B7E</text>
+      <text x="20" y="40" font-size="10.5" fill="#71717A">04/10/2026 09:47</text>
+      <text x="206" y="30" fill="#F4F4F5" font-weight="700">Rosa Giménez</text>
+      <text x="366" y="30" fill="#A1A1AA">Carla Ruiz</text>
+      <rect x="506" y="17" width="76" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="544" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">EFECTIVO</text>
+      <rect x="588" y="17" width="58" height="18" rx="6" fill="#27272A"/><text x="617" y="30" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">LOCAL</text>
+      <rect x="686" y="17" width="52" height="18" rx="6" fill="#3B82F6" fill-opacity="0.18"/><text x="712" y="30" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">ARCA</text>
+      <rect x="744" y="17" width="36" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="762" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">OK</text>
+      <text x="926" y="30" fill="#F4F4F5" font-weight="800" text-anchor="end">$5.640,00</text>
+      <rect x="950" y="15" width="86" height="26" rx="9" fill="#27272A"/><text x="993" y="32" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Detalle ⌄</text>
+      <rect x="1046" y="15" width="86" height="26" rx="9" fill="#EF4444" fill-opacity="0.14"/><text x="1089" y="32" font-size="11" font-weight="800" fill="#F87171" text-anchor="middle">Anular</text>
+    </g>
+    <path d="M20 376H1132" stroke="#18181B"/>
+    <g transform="translate(0,376)" font-size="12.5" opacity="0.55">
+      <text x="20" y="24" fill="#F4F4F5" font-weight="700">#A4F29B12</text>
+      <text x="20" y="40" font-size="10.5" fill="#71717A">04/10/2026 08:15</text>
+      <text x="206" y="30" fill="#F4F4F5" font-weight="700">Sin nombre</text>
+      <text x="366" y="30" fill="#A1A1AA">Tomás Alcaraz</text>
+      <rect x="506" y="17" width="76" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="544" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">EFECTIVO</text>
+      <rect x="588" y="17" width="58" height="18" rx="6" fill="#27272A"/><text x="617" y="30" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">LOCAL</text>
+      <rect x="686" y="17" width="66" height="18" rx="6" fill="#27272A"/><text x="719" y="30" font-size="9.5" font-weight="800" fill="#A1A1AA" text-anchor="middle">INTERNO</text>
+      <rect x="758" y="17" width="66" height="18" rx="6" fill="#EF4444" fill-opacity="0.18"/><text x="791" y="30" font-size="9.5" font-weight="800" fill="#F87171" text-anchor="middle">ANULADA</text>
+      <text x="926" y="30" fill="#A1A1AA" font-weight="800" text-anchor="end">$3.290,00</text>
+      <rect x="950" y="15" width="86" height="26" rx="9" fill="#27272A"/><text x="993" y="32" font-size="11" font-weight="800" fill="#71717A" text-anchor="middle">Detalle ⌄</text>
+    </g>
+    <path d="M20 430H1132" stroke="#18181B"/>
+    <g transform="translate(0,430)" font-size="12.5">
+      <text x="20" y="24" fill="#F4F4F5" font-weight="700">#A4F29A88</text>
+      <text x="20" y="40" font-size="10.5" fill="#71717A">03/10/2026 19:22</text>
+      <text x="206" y="30" fill="#F4F4F5" font-weight="700">Diego Sosa</text>
+      <text x="366" y="30" fill="#A1A1AA">Emiliano</text>
+      <rect x="506" y="17" width="70" height="18" rx="6" fill="#3B82F6" fill-opacity="0.16"/><text x="541" y="30" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">TARJETA</text>
+      <rect x="582" y="17" width="60" height="18" rx="6" fill="#F97316" fill-opacity="0.18"/><text x="612" y="30" font-size="9.5" font-weight="800" fill="#FB923C" text-anchor="middle">ENVÍO</text>
+      <rect x="686" y="17" width="52" height="18" rx="6" fill="#3B82F6" fill-opacity="0.18"/><text x="712" y="30" font-size="9.5" font-weight="800" fill="#93C5FD" text-anchor="middle">ARCA</text>
+      <rect x="744" y="17" width="36" height="18" rx="6" fill="#10B981" fill-opacity="0.16"/><text x="762" y="30" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">OK</text>
+      <text x="926" y="30" fill="#F4F4F5" font-weight="800" text-anchor="end">$16.980,00</text>
+      <rect x="950" y="15" width="86" height="26" rx="9" fill="#27272A"/><text x="993" y="32" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Detalle ⌄</text>
+      <rect x="1046" y="15" width="86" height="26" rx="9" fill="#EF4444" fill-opacity="0.14"/><text x="1089" y="32" font-size="11" font-weight="800" fill="#F87171" text-anchor="middle">Anular</text>
+    </g>
+    <path d="M20 484H1132" stroke="#27272A"/>
+    <text x="20" y="499" font-size="11" fill="#52525B">Mostrando 6 de 128 ventas · actualizado hace 2 min</text>
+    <rect x="1006" y="474" width="26" height="24" rx="8" fill="#27272A"/>
+    <text x="1019" y="490" font-size="11" font-weight="800" fill="#71717A" text-anchor="middle">‹</text>
+    <rect x="1038" y="474" width="26" height="24" rx="8" fill="#6366F1"/>
+    <text x="1051" y="490" font-size="11" font-weight="800" fill="#fff" text-anchor="middle">1</text>
+    <rect x="1070" y="474" width="26" height="24" rx="8" fill="#27272A"/>
+    <text x="1083" y="490" font-size="11" font-weight="800" fill="#A1A1AA" text-anchor="middle">2</text>
+    <rect x="1102" y="474" width="26" height="24" rx="8" fill="#27272A"/>
+    <text x="1115" y="490" font-size="11" font-weight="800" fill="#A1A1AA" text-anchor="middle">3</text>
+    <text x="1132" y="490" font-size="11" fill="#52525B" text-anchor="end">… 22</text>
+  </g>
+</g>
+</svg>

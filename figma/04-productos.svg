@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="Plus Jakarta Sans, Inter, Segoe UI, sans-serif">
+<defs>
+  <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4338CA"/>
+  </linearGradient>
+  <linearGradient id="avatarGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F97316"/><stop offset="1" stop-color="#4F46E5"/>
+  </linearGradient>
+</defs>
+<rect width="1440" height="900" fill="#09090B"/>
+<g id="Sidebar">
+  <rect width="240" height="900" fill="#0C0C0F"/>
+  <path d="M240 0V900" stroke="#27272A"/>
+  <rect x="20" y="20" width="36" height="36" rx="12" fill="url(#brandGrad)"/>
+  <path d="M28 48c0-9 7-16 16-16 0 9-7 16-16 16z" fill="#fff"/>
+  <path d="M28 48L44 32" stroke="#4338CA" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="66" y="35" font-size="13.5" font-weight="800" fill="#F4F4F5">Dietética</text>
+  <text x="66" y="52" font-size="13.5" font-weight="800" fill="#6366F1">Vishal</text>
+  <g transform="translate(12,88)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none">
+      <rect x="0" y="0" width="7.5" height="7.5" rx="2"/><rect x="10" y="0" width="7.5" height="7.5" rx="2"/>
+      <rect x="0" y="10" width="7.5" height="7.5" rx="2"/><rect x="10" y="10" width="7.5" height="7.5" rx="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Panel Principal</text>
+  </g>
+  <g transform="translate(12,134)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 2h2.6l1.6 8.5h7.6l1.6-6.5H4.2"/><circle cx="6" cy="14" r="1.7"/><circle cx="12" cy="14" r="1.7"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Venta Rápida (POS)</text>
+  </g>
+  <g transform="translate(12,180)">
+    <rect width="216" height="40" rx="10" fill="#6366F1" fill-opacity="0.14"/>
+    <rect width="3" height="20" y="10" rx="1.5" fill="#6366F1"/>
+    <g transform="translate(15,11)" stroke="#A5B4FC" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <path d="M9 0l8 4.5v9L9 18l-8-4.5v-9z"/><path d="M1 4.5L9 9l8-4.5M9 9v9"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="700" fill="#C7D2FE">Productos / Stock</text>
+    <rect x="176" y="11" width="30" height="18" rx="9" fill="#EF4444"/>
+    <text x="191" y="24" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">12</text>
+  </g>
+  <g transform="translate(12,226)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <rect x="0" y="3" width="10" height="9" rx="1.5"/><path d="M10 6h4l3.5 3.5V12H10z"/>
+      <circle cx="5" cy="14.5" r="2"/><circle cx="13.5" cy="14.5" r="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Ingreso Mercadería</text>
+  </g>
+  <g transform="translate(12,272)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="8"/><path d="M9 4.5V9l3.6 2.2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Pedidos &amp; Historial</text>
+  </g>
+  <g transform="translate(12,318)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 14l5-5 3.5 3L17 2"/><path d="M12 2h5v5"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Mi actividad</text>
+  </g>
+  <g transform="translate(12,364)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="7" cy="6" r="3.5"/><path d="M1 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+      <path d="M13.2 3.6a3.4 3.4 0 0 1 0 6.4"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Usuarios y Actividad</text>
+  </g>
+  <path d="M20 430H220" stroke="#27272A"/>
+  <g transform="translate(12,820)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="3.5"/>
+      <path d="M9 0v3M9 15v3M0 9h3M15 9h3M2.6 2.6l2.1 2.1M13.3 13.3l2.1 2.1M15.4 2.6l-2.1 2.1M4.7 13.3l-2.1 2.1"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Configuración</text>
+  </g>
+</g>
+<g id="Header">
+  <rect x="240" width="1200" height="64" fill="#18181B"/>
+  <path d="M240 64.5H1440" stroke="#27272A"/>
+  <rect x="256" y="16" width="32" height="32" rx="10" fill="#27272A"/>
+  <g stroke="#A1A1AA" stroke-width="1.7" fill="none"><rect x="264" y="24" width="16" height="16" rx="3"/><path d="M270 24v16"/></g>
+  <rect x="304" y="14" width="420" height="36" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+  <g stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="324" cy="30" r="5.5"/><path d="M328.5 34.5l4 4"/></g>
+  <text x="344" y="36" font-size="13" fill="#52525B">Buscar productos, ventas, clientes...</text>
+  <rect x="676" y="22" width="40" height="20" rx="6" fill="#18181B" stroke="#3F3F46"/>
+  <text x="696" y="36" font-size="10" font-weight="700" fill="#71717A" text-anchor="middle" font-family="monospace">&#8984;K</text>
+  <g transform="translate(1228,20)" stroke="#A1A1AA" stroke-width="1.6" fill="none" stroke-linejoin="round">
+    <path d="M6.5 2a5 5 0 0 0-5 5v4l-1.5 3h13L11.5 11V7a5 5 0 0 0-5-5z"/>
+    <path d="M5.2 16.4a1.9 1.9 0 0 0 3.1 0"/>
+  </g>
+  <circle cx="1238" cy="22" r="4.5" fill="#EF4444"/>
+  <path d="M1268 16v32" stroke="#27272A"/>
+  <circle cx="1302" cy="32" r="16" fill="#27272A"/>
+  <g stroke="#FBBF24" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <circle cx="1302" cy="32" r="4.5"/><path d="M1302 22v3M1302 39v3M1292 32h3M1309 32h3M1295 25l2 2M1307 37l2 2M1309 25l-2 2M1297 37l-2 2"/>
+  </g>
+  <circle cx="1350" cy="32" r="16" fill="url(#avatarGrad)"/>
+  <text x="1350" y="37" font-size="13" font-weight="800" fill="#fff" text-anchor="middle">E</text>
+  <text x="1374" y="29" font-size="12" font-weight="700" fill="#F4F4F5">Emiliano</text>
+  <text x="1374" y="44" font-size="9" font-weight="700" fill="#71717A" letter-spacing="1">ADMIN</text>
+</g>
+<g id="Content">
+  <text x="264" y="112" font-size="24" font-weight="800" fill="#F4F4F5">Productos / Stock</text>
+  <text x="264" y="136" font-size="13" fill="#71717A">342 productos cargados · 12 con stock bajo · 3 agotados</text>
+  <rect x="1244" y="96" width="172" height="42" rx="13" fill="#4F46E5"/>
+  <path d="M1270 117v-12M1264 111h12" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="1340" y="122" font-size="13.5" font-weight="800" fill="#fff" text-anchor="middle">Nuevo Producto</text>
+  <g transform="translate(264,164)">
+    <rect width="276" height="92" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="18" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">TOTAL PRODUCTOS</text>
+    <text x="18" y="68" font-size="26" font-weight="800" fill="#F4F4F5">342</text>
+    <circle cx="242" cy="34" r="16" fill="#6366F1" fill-opacity="0.15"/>
+    <path d="M242 26l7 4v8l-7 4-7-4v-8z" fill="none" stroke="#818CF8" stroke-width="1.6" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(556,164)">
+    <rect width="276" height="92" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="18" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">STOCK BAJO</text>
+    <text x="18" y="68" font-size="26" font-weight="800" fill="#F59E0B">12</text>
+    <circle cx="242" cy="34" r="16" fill="#F59E0B" fill-opacity="0.15"/>
+    <path d="M242 25v10M242 40v1.5" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(848,164)">
+    <rect width="276" height="92" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="18" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">SIN STOCK</text>
+    <text x="18" y="68" font-size="26" font-weight="800" fill="#EF4444">3</text>
+    <circle cx="242" cy="34" r="16" fill="#EF4444" fill-opacity="0.15"/>
+    <circle cx="242" cy="34" r="8" fill="none" stroke="#F87171" stroke-width="2"/>
+    <path d="M236.5 28.5l11 11" stroke="#F87171" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(1140,164)">
+    <rect width="276" height="92" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="18" y="30" font-size="10.5" font-weight="800" fill="#71717A" letter-spacing="1">VALORIZADO</text>
+    <text x="18" y="68" font-size="26" font-weight="800" fill="#F4F4F5">$4.280.000</text>
+    <circle cx="242" cy="34" r="16" fill="#10B981" fill-opacity="0.15"/>
+    <g stroke="#34D399" stroke-width="1.7" fill="none"><path d="M234 30h16v10h-16z"/><path d="M234 34h16M238 38h4"/></g>
+  </g>
+  <g id="Toolbar">
+    <rect x="264" y="276" width="420" height="44" rx="13" fill="#0C0C0F" stroke="#27272A"/>
+    <g stroke="#52525B" stroke-width="1.7" fill="none" stroke-linecap="round"><circle cx="290" cy="296" r="6"/><path d="M295 301l5 5"/></g>
+    <text x="312" y="303" font-size="13" fill="#52525B">Buscar por nombre, SKU o código de barra...</text>
+    <g font-size="12.5" font-weight="700">
+      <rect x="700" y="276" width="64" height="44" rx="13" fill="#6366F1" fill-opacity="0.16" stroke="#6366F1" stroke-opacity="0.5"/>
+      <text x="732" y="303" fill="#A5B4FC" text-anchor="middle">Todos</text>
+      <rect x="772" y="276" width="80" height="44" rx="13" fill="#18181B" stroke="#27272A"/>
+      <text x="812" y="303" fill="#A1A1AA" text-anchor="middle">Almacén</text>
+      <rect x="860" y="276" width="76" height="44" rx="13" fill="#18181B" stroke="#27272A"/>
+      <text x="898" y="303" fill="#A1A1AA" text-anchor="middle">Bebidas</text>
+      <rect x="944" y="276" width="80" height="44" rx="13" fill="#18181B" stroke="#27272A"/>
+      <text x="984" y="303" fill="#A1A1AA" text-anchor="middle">Lácteos</text>
+      <rect x="1156" y="276" width="104" height="44" rx="13" fill="#18181B" stroke="#27272A"/>
+      <text x="1208" y="303" fill="#A1A1AA" text-anchor="middle">Mas filtros</text>
+      <rect x="1276" y="276" width="140" height="44" rx="13" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="1346" y="303" fill="#A1A1AA" text-anchor="middle">Exportar CSV</text>
+    </g>
+  </g>
+  <g id="TablaProductos">
+    <rect x="264" y="340" width="1152" height="470" rx="16" fill="#18181B" stroke="#27272A"/>
+    <path d="M264 388H1416" stroke="#27272A"/>
+    <rect x="265" y="341" width="1150" height="47" rx="15" fill="#0C0C0F"/>
+    <g font-size="10.5" font-weight="800" fill="#52525B" letter-spacing="0.8">
+      <text x="284" y="369">PRODUCTO</text>
+      <text x="704" y="369">CATEGORÍA</text>
+      <text x="890" y="369">STOCK</text>
+      <text x="1000" y="369">PRECIO VENTA</text>
+      <text x="1130" y="369">ESTADO</text>
+      <text x="1310" y="369">ACCIONES</text>
+    </g>
+    <g transform="translate(0,388)">
+      <circle cx="298" cy="26" r="14" fill="#6366F1" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#818CF8" text-anchor="middle">AN</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Aceite Natura 900ml</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: ACE-900 · 7791234567890</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Almacén</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#10B981">24 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$8.950</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#10B981" fill-opacity="0.15"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#34D399" text-anchor="middle">Disponible</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,440)">
+      <circle cx="298" cy="26" r="14" fill="#10B981" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#34D399" text-anchor="middle">AG</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Arroz Gallo 1kg</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: ARR-1000 · 7791234500112</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Almacén</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#10B981">41 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$4.320</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#10B981" fill-opacity="0.15"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#34D399" text-anchor="middle">Disponible</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,492)">
+      <circle cx="298" cy="26" r="14" fill="#F97316" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#FB923C" text-anchor="middle">YP</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Yerba Playadito 1kg</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: YER-1000 · 7790000451234</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Bebidas</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#F59E0B">8 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$6.780</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#F59E0B" fill-opacity="0.16"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#F59E0B" text-anchor="middle">Stock bajo</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,544)">
+      <circle cx="298" cy="26" r="14" fill="#3B82F6" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#60A5FA" text-anchor="middle">LS</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Leche Serenísima 1L</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: LEC-1000 · 7791011000123</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Lácteos</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#10B981">12 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$2.190</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#10B981" fill-opacity="0.15"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#34D399" text-anchor="middle">Disponible</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,596)">
+      <circle cx="298" cy="26" r="14" fill="#8B5CF6" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#A78BFA" text-anchor="middle">GO</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Galletitas Oreo 118g</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: GAL-118 · 7622300336034</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Snacks</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#10B981">30 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$3.450</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#10B981" fill-opacity="0.15"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#34D399" text-anchor="middle">Disponible</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,648)">
+      <circle cx="298" cy="26" r="14" fill="#EF4444" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#F87171" text-anchor="middle">HP</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Harina Pureza 1kg</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: HAR-1000 · 7790230001234</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Almacén</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#EF4444">0 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$2.870</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#EF4444" fill-opacity="0.16"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#EF4444" text-anchor="middle">Agotado</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,700)">
+      <circle cx="298" cy="26" r="14" fill="#6366F1" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#818CF8" text-anchor="middle">FM</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Fideos Matarazzo 500g</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: FID-500 · 7790861000500</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Almacén</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#10B981">19 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$3.120</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#10B981" fill-opacity="0.15"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#34D399" text-anchor="middle">Disponible</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+      <path d="M264 52H1416" stroke="#27272A"/>
+    </g>
+    <g transform="translate(0,752)">
+      <circle cx="298" cy="26" r="14" fill="#3B82F6" fill-opacity="0.18"/>
+      <text x="298" y="30" font-size="10.5" font-weight="800" fill="#60A5FA" text-anchor="middle">AV</text>
+      <text x="324" y="24" font-size="13" font-weight="700" fill="#F4F4F5">Agua Villavicencio 2L</text>
+      <text x="324" y="41" font-size="11" fill="#52525B">SKU: AGU-2000 · 7790892000200</text>
+      <rect x="704" y="14" width="104" height="24" rx="8" fill="#27272A"/>
+      <text x="756" y="30" font-size="11.5" font-weight="700" fill="#A1A1AA" text-anchor="middle">Bebidas</text>
+      <text x="890" y="32" font-size="13" font-weight="800" fill="#F59E0B">6 u</text>
+      <text x="1000" y="32" font-size="13" font-weight="700" fill="#F4F4F5">$1.980</text>
+      <rect x="1130" y="14" width="104" height="24" rx="8" fill="#F59E0B" fill-opacity="0.16"/>
+      <text x="1182" y="30" font-size="11.5" font-weight="800" fill="#F59E0B" text-anchor="middle">Stock bajo</text>
+      <text x="1330" y="32" font-size="15" font-weight="800" fill="#52525B" text-anchor="middle">...</text>
+    </g>
+  </g>
+  <g id="FAB">
+    <circle cx="1388" cy="846" r="30" fill="#6366F1" fill-opacity="0.25"/>
+    <circle cx="1388" cy="844" r="26" fill="#6366F1"/>
+    <path d="M1388 834v20M1378 844h20" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</g>
+</svg>

@@ -1,0 +1,248 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="Plus Jakarta Sans, Inter, Segoe UI, sans-serif">
+<defs>
+  <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4338CA"/>
+  </linearGradient>
+  <linearGradient id="avatarGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F97316"/><stop offset="1" stop-color="#4F46E5"/>
+  </linearGradient>
+  <linearGradient id="guideBg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#18181B"/><stop offset="1" stop-color="#27272A"/>
+  </linearGradient>
+</defs>
+<rect width="1440" height="900" fill="#09090B"/>
+<g id="Sidebar">
+  <rect width="240" height="900" fill="#0C0C0F"/>
+  <path d="M240 0V900" stroke="#27272A"/>
+  <rect x="20" y="20" width="36" height="36" rx="12" fill="url(#brandGrad)"/>
+  <path d="M28 48c0-9 7-16 16-16 0 9-7 16-16 16z" fill="#fff"/>
+  <path d="M28 48L44 32" stroke="#4338CA" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="66" y="35" font-size="13.5" font-weight="800" fill="#F4F4F5">Dietética</text>
+  <text x="66" y="52" font-size="13.5" font-weight="800" fill="#6366F1">Vishal</text>
+  <g transform="translate(12,88)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none">
+      <rect x="0" y="0" width="7.5" height="7.5" rx="2"/><rect x="10" y="0" width="7.5" height="7.5" rx="2"/>
+      <rect x="0" y="10" width="7.5" height="7.5" rx="2"/><rect x="10" y="10" width="7.5" height="7.5" rx="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Panel Principal</text>
+  </g>
+  <g transform="translate(12,134)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 2h2.6l1.6 8.5h7.6l1.6-6.5H4.2"/><circle cx="6" cy="14" r="1.7"/><circle cx="12" cy="14" r="1.7"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Venta Rápida (POS)</text>
+  </g>
+  <g transform="translate(12,180)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <path d="M9 0l8 4.5v9L9 18l-8-4.5v-9z"/><path d="M1 4.5L9 9l8-4.5M9 9v9"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Productos / Stock</text>
+    <rect x="176" y="11" width="30" height="18" rx="9" fill="#EF4444"/>
+    <text x="191" y="24" font-size="10" font-weight="800" fill="#fff" text-anchor="middle">12</text>
+  </g>
+  <g transform="translate(12,226)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linejoin="round">
+      <rect x="0" y="3" width="10" height="9" rx="1.5"/><path d="M10 6h4l3.5 3.5V12H10z"/>
+      <circle cx="5" cy="14.5" r="2"/><circle cx="13.5" cy="14.5" r="2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Ingreso Mercadería</text>
+  </g>
+  <g transform="translate(12,272)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="8"/><path d="M9 4.5V9l3.6 2.2"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Pedidos &amp; Historial</text>
+  </g>
+  <g transform="translate(12,318)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 14l5-5 3.5 3L17 2"/><path d="M12 2h5v5"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Mi actividad</text>
+  </g>
+  <g transform="translate(12,364)">
+    <rect width="216" height="40" rx="10" fill="#6366F1" fill-opacity="0.14"/>
+    <rect width="3" height="20" y="10" rx="1.5" fill="#6366F1"/>
+    <g transform="translate(15,11)" stroke="#A5B4FC" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="7" cy="6" r="3.5"/><path d="M1 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+      <path d="M13.2 3.6a3.4 3.4 0 0 1 0 6.4"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="700" fill="#C7D2FE">Usuarios y Actividad</text>
+  </g>
+  <path d="M20 430H220" stroke="#27272A"/>
+  <g transform="translate(12,820)">
+    <g transform="translate(15,11)" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round">
+      <circle cx="9" cy="9" r="3.5"/>
+      <path d="M9 0v3M9 15v3M0 9h3M15 9h3M2.6 2.6l2.1 2.1M13.3 13.3l2.1 2.1M15.4 2.6l-2.1 2.1M4.7 13.3l-2.1 2.1"/>
+    </g>
+    <text x="44" y="25" font-size="13" font-weight="600" fill="#A1A1AA">Configuración</text>
+  </g>
+</g>
+<g id="Header">
+  <rect x="240" width="1200" height="64" fill="#18181B"/>
+  <path d="M240 64.5H1440" stroke="#27272A"/>
+  <rect x="256" y="16" width="32" height="32" rx="10" fill="#27272A"/>
+  <g stroke="#A1A1AA" stroke-width="1.7" fill="none"><rect x="264" y="24" width="16" height="16" rx="3"/><path d="M270 24v16"/></g>
+  <rect x="304" y="14" width="420" height="36" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+  <g stroke="#52525B" stroke-width="1.6" fill="none" stroke-linecap="round"><circle cx="324" cy="30" r="5.5"/><path d="M328.5 34.5l4 4"/></g>
+  <text x="344" y="36" font-size="13" fill="#52525B">Buscar productos, ventas, clientes...</text>
+  <rect x="676" y="22" width="40" height="20" rx="6" fill="#18181B" stroke="#3F3F46"/>
+  <text x="696" y="36" font-size="10" font-weight="700" fill="#71717A" text-anchor="middle" font-family="monospace">&#8984;K</text>
+  <g transform="translate(1228,20)" stroke="#A1A1AA" stroke-width="1.6" fill="none" stroke-linejoin="round">
+    <path d="M6.5 2a5 5 0 0 0-5 5v4l-1.5 3h13L11.5 11V7a5 5 0 0 0-5-5z"/>
+    <path d="M5.2 16.4a1.9 1.9 0 0 0 3.1 0"/>
+  </g>
+  <circle cx="1238" cy="22" r="4.5" fill="#EF4444"/>
+  <path d="M1268 16v32" stroke="#27272A"/>
+  <circle cx="1302" cy="32" r="16" fill="#27272A"/>
+  <g stroke="#FBBF24" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <circle cx="1302" cy="32" r="4.5"/><path d="M1302 22v3M1302 39v3M1292 32h3M1309 32h3M1295 25l2 2M1307 37l2 2M1309 25l-2 2M1297 37l-2 2"/>
+  </g>
+  <circle cx="1350" cy="32" r="16" fill="url(#avatarGrad)"/>
+  <text x="1350" y="37" font-size="13" font-weight="800" fill="#fff" text-anchor="middle">E</text>
+  <text x="1374" y="29" font-size="12" font-weight="700" fill="#F4F4F5">Emiliano</text>
+  <text x="1374" y="44" font-size="9" font-weight="700" fill="#71717A" letter-spacing="1">ADMIN</text>
+</g>
+<g id="Content">
+  <text x="264" y="112" font-size="24" font-weight="800" fill="#F4F4F5">Gestión de Usuarios y Permisos</text>
+  <text x="264" y="136" font-size="13" fill="#71717A">Administra los roles del personal (Admin, Supervisor, Vendedor)</text>
+  <rect x="1286" y="96" width="130" height="36" rx="12" fill="#10B981"/>
+  <text x="1351" y="119" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">Actualizar Lista</text>
+  <g id="TablaUsuarios" transform="translate(264,164)">
+    <rect width="1152" height="376" rx="16" fill="#18181B" stroke="#27272A"/>
+    <rect x="1" y="1" width="1150" height="42" rx="15" fill="#0C0C0F"/>
+    <g font-size="10.5" font-weight="800" fill="#52525B" letter-spacing="0.8">
+      <text x="24" y="27">USUARIO</text><text x="330" y="27">CORREO ELECTRÓNICO</text>
+      <text x="640" y="27">ROL ASIGNADO</text><text x="790" y="27">PERMISOS DEL SISTEMA</text>
+      <text x="1096" y="27" text-anchor="middle">ACTIVIDAD</text>
+    </g>
+    <path d="M0 43H1152" stroke="#27272A"/>
+    <g transform="translate(0,43)" font-size="12.5">
+      <circle cx="40" cy="32" r="16" fill="url(#avatarGrad)"/>
+      <text x="40" y="37" font-size="13" font-weight="800" fill="#fff" text-anchor="middle">E</text>
+      <text x="68" y="30" fill="#F4F4F5" font-weight="700">Emiliano Vega</text>
+      <rect x="176" y="17" width="30" height="17" rx="8.5" fill="#10B981" fill-opacity="0.16"/>
+      <text x="191" y="29" font-size="9.5" font-weight="800" fill="#34D399" text-anchor="middle">TÚ</text>
+      <text x="68" y="47" font-size="10.5" fill="#71717A">Administrador principal</text>
+      <text x="330" y="38" fill="#A1A1AA">emiliano@dietetica.com</text>
+      <rect x="640" y="22" width="66" height="21" rx="10.5" fill="#A855F7" fill-opacity="0.18"/>
+      <text x="673" y="36" font-size="10" font-weight="800" fill="#D8B4FE" text-anchor="middle">ADMIN</text>
+      <rect x="790" y="20" width="252" height="26" rx="9" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="804" y="37" font-size="11.5" fill="#F4F4F5">Administrador (Total)</text>
+      <path d="M1020 30l4 5 4-5" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <rect x="1064" y="20" width="64" height="26" rx="9" fill="#27272A"/>
+      <text x="1096" y="37" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Ver</text>
+    </g>
+    <path d="M0 107H1152" stroke="#27272A"/>
+    <g transform="translate(0,107)" font-size="12.5">
+      <circle cx="40" cy="32" r="16" fill="#3B82F6" fill-opacity="0.22"/>
+      <text x="40" y="37" font-size="13" font-weight="800" fill="#93C5FD" text-anchor="middle">C</text>
+      <text x="68" y="37" fill="#F4F4F5" font-weight="700">Carla Ruiz</text>
+      <text x="330" y="38" fill="#A1A1AA">carla@dietetica.com</text>
+      <rect x="640" y="22" width="98" height="21" rx="10.5" fill="#3B82F6" fill-opacity="0.18"/>
+      <text x="689" y="36" font-size="10" font-weight="800" fill="#93C5FD" text-anchor="middle">SUPERVISOR</text>
+      <rect x="790" y="20" width="252" height="26" rx="9" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="804" y="37" font-size="11.5" fill="#F4F4F5">Supervisor (Control)</text>
+      <path d="M1020 30l4 5 4-5" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <rect x="1064" y="20" width="64" height="26" rx="9" fill="#27272A"/>
+      <text x="1096" y="37" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Ver</text>
+    </g>
+    <path d="M0 171H1152" stroke="#27272A"/>
+    <g transform="translate(0,171)" font-size="12.5">
+      <circle cx="40" cy="32" r="16" fill="#10B981" fill-opacity="0.2"/>
+      <text x="40" y="37" font-size="13" font-weight="800" fill="#34D399" text-anchor="middle">T</text>
+      <text x="68" y="37" fill="#F4F4F5" font-weight="700">Tomás Alcaraz</text>
+      <text x="330" y="38" fill="#A1A1AA">tomas@dietetica.com</text>
+      <rect x="640" y="22" width="90" height="21" rx="10.5" fill="#10B981" fill-opacity="0.18"/>
+      <text x="685" y="36" font-size="10" font-weight="800" fill="#34D399" text-anchor="middle">VENDEDOR</text>
+      <rect x="790" y="20" width="252" height="26" rx="9" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="804" y="37" font-size="11.5" fill="#F4F4F5">Vendedor (Caja/POS)</text>
+      <path d="M1020 30l4 5 4-5" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <rect x="1064" y="20" width="64" height="26" rx="9" fill="#27272A"/>
+      <text x="1096" y="37" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Ver</text>
+    </g>
+    <path d="M0 235H1152" stroke="#27272A"/>
+    <g transform="translate(0,235)" font-size="12.5">
+      <circle cx="40" cy="32" r="16" fill="#10B981" fill-opacity="0.2"/>
+      <text x="40" y="37" font-size="13" font-weight="800" fill="#34D399" text-anchor="middle">L</text>
+      <text x="68" y="37" fill="#F4F4F5" font-weight="700">Lucía Ferrero</text>
+      <text x="330" y="38" fill="#A1A1AA">lucia@dietetica.com</text>
+      <rect x="640" y="22" width="90" height="21" rx="10.5" fill="#10B981" fill-opacity="0.18"/>
+      <text x="685" y="36" font-size="10" font-weight="800" fill="#34D399" text-anchor="middle">VENDEDOR</text>
+      <rect x="790" y="20" width="252" height="26" rx="9" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="804" y="37" font-size="11.5" fill="#F4F4F5">Vendedor (Caja/POS)</text>
+      <path d="M1020 30l4 5 4-5" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <rect x="1064" y="20" width="64" height="26" rx="9" fill="#27272A"/>
+      <text x="1096" y="37" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Ver</text>
+    </g>
+    <path d="M0 299H1152" stroke="#27272A"/>
+    <g transform="translate(0,299)" font-size="12.5">
+      <circle cx="40" cy="32" r="16" fill="#3B82F6" fill-opacity="0.22"/>
+      <text x="40" y="37" font-size="13" font-weight="800" fill="#93C5FD" text-anchor="middle">M</text>
+      <text x="68" y="37" fill="#F4F4F5" font-weight="700">Martín Ponce</text>
+      <text x="330" y="38" fill="#A1A1AA">martin@dietetica.com</text>
+      <rect x="640" y="22" width="98" height="21" rx="10.5" fill="#3B82F6" fill-opacity="0.18"/>
+      <text x="689" y="36" font-size="10" font-weight="800" fill="#93C5FD" text-anchor="middle">SUPERVISOR</text>
+      <rect x="790" y="20" width="252" height="26" rx="9" fill="#0C0C0F" stroke="#3F3F46"/>
+      <text x="804" y="37" font-size="11.5" fill="#F4F4F5">Supervisor (Control)</text>
+      <path d="M1020 30l4 5 4-5" stroke="#71717A" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+      <rect x="1064" y="20" width="64" height="26" rx="9" fill="#27272A"/>
+      <text x="1096" y="37" font-size="11" font-weight="800" fill="#C7D2FE" text-anchor="middle">Ver</text>
+    </g>
+  </g>
+  <g id="GuiaRoles" transform="translate(264,564)">
+    <rect width="564" height="288" rx="16" fill="url(#guideBg)" stroke="#3F3F46"/>
+    <g transform="translate(24,24)" stroke="#34D399" stroke-width="1.8" fill="none" stroke-linejoin="round">
+      <path d="M11 0l11 4v8c0 6.6-4.5 12.6-11 14.5C4.5 24.6 0 18.6 0 12V4z"/>
+      <path d="M6 12l3.5 3.5L16 8"/>
+    </g>
+    <text x="70" y="40" font-size="15" font-weight="800" fill="#F4F4F5">Guía de Roles y Permisos</text>
+    <text x="70" y="58" font-size="11.5" fill="#71717A">Estilo SaaS · quién puede hacer qué</text>
+    <g transform="translate(24,84)">
+      <rect width="516" height="58" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+      <rect x="14" y="13" width="4" height="32" rx="2" fill="#A855F7"/>
+      <text x="32" y="30" font-size="12.5" font-weight="800" fill="#D8B4FE">Administrador</text>
+      <text x="32" y="47" font-size="11.5" fill="#A1A1AA">Acceso total: productos, costos, usuarios, reportes y caja.</text>
+    </g>
+    <g transform="translate(24,152)">
+      <rect width="516" height="58" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+      <rect x="14" y="13" width="4" height="32" rx="2" fill="#3B82F6"/>
+      <text x="32" y="30" font-size="12.5" font-weight="800" fill="#93C5FD">Supervisor</text>
+      <text x="32" y="47" font-size="11.5" fill="#A1A1AA">Control de stock, alertas críticas, reportes y ventas.</text>
+    </g>
+    <g transform="translate(24,220)">
+      <rect width="516" height="58" rx="12" fill="#0C0C0F" stroke="#27272A"/>
+      <rect x="14" y="13" width="4" height="32" rx="2" fill="#10B981"/>
+      <text x="32" y="30" font-size="12.5" font-weight="800" fill="#34D399">Vendedor</text>
+      <text x="32" y="47" font-size="11.5" fill="#A1A1AA">Acceso exclusivo a Caja / POS: registrar ventas y cobrar.</text>
+    </g>
+  </g>
+  <g id="ActividadModal" transform="translate(852,564)">
+    <rect width="564" height="288" rx="16" fill="#18181B" stroke="#27272A"/>
+    <text x="24" y="34" font-size="15" font-weight="800" fill="#F4F4F5">Actividad de Carla Ruiz</text>
+    <text x="24" y="52" font-size="11" fill="#71717A" font-family="monospace">carla@dietetica.com · supervisor</text>
+    <g transform="translate(512,18)" stroke="#71717A" stroke-width="1.8" stroke-linecap="round">
+      <path d="M0 0l14 14M14 0L0 14"/>
+    </g>
+    <path d="M24 66H540" stroke="#27272A"/>
+    <text x="24" y="90" font-size="10" font-weight="800" fill="#52525B" letter-spacing="1">ÚLTIMAS VENTAS (14)</text>
+    <g font-size="12">
+      <rect x="24" y="100" width="516" height="42" rx="10" fill="#0C0C0F" stroke="#27272A"/>
+      <text x="38" y="120" fill="#F4F4F5" font-weight="700" font-family="monospace" font-size="11.5">N° 0001-000042</text>
+      <text x="38" y="135" font-size="10.5" fill="#71717A">04/10/2026 10:32 · Efectivo · OK</text>
+      <text x="526" y="127" fill="#34D399" font-weight="800" text-anchor="end">$23.150</text>
+      <rect x="24" y="148" width="516" height="42" rx="10" fill="#0C0C0F" stroke="#27272A"/>
+      <text x="38" y="168" fill="#F4F4F5" font-weight="700" font-family="monospace" font-size="11.5">N° 0001-000041</text>
+      <text x="38" y="183" font-size="10.5" fill="#71717A">04/10/2026 09:47 · Tarjeta · OK</text>
+      <text x="526" y="175" fill="#34D399" font-weight="800" text-anchor="end">$5.640</text>
+    </g>
+    <text x="24" y="216" font-size="10" font-weight="800" fill="#52525B" letter-spacing="1">MOVIMIENTOS DE STOCK (6)</text>
+    <g font-size="11.5">
+      <rect x="24" y="226" width="516" height="42" rx="10" fill="#0C0C0F" stroke="#27272A"/>
+      <circle cx="42" cy="247" r="5" fill="#10B981"/>
+      <text x="56" y="244" fill="#F4F4F5" font-weight="700">Arroz Gallo 1kg <tspan fill="#71717A" font-weight="500">· ingreso +24</tspan></text>
+      <text x="56" y="259" font-size="10.5" fill="#71717A">Depósito · hace 1 h</text>
+      <text x="526" y="251" fill="#A1A1AA" font-weight="700" text-anchor="end">+24 u</text>
+    </g>
+  </g>
+</g>
+</svg>

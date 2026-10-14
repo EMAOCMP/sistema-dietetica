@@ -1,0 +1,325 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===== Campify Dark x Premium SaaS — Design Tokens ===== */
+@theme {
+  --color-obsidian-950: #09090b;
+  --color-obsidian-900: #0c0c0f;
+  --color-obsidian-800: #18181b;
+  --color-obsidian-700: #27272a;
+  --color-obsidian-600: #3f3f46;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-accent-orange: #f97316;
+  --color-accent-emerald: #10b981;
+  --shadow-glow-brand: 0 0 20px rgba(99, 102, 241, 0.35);
+  --shadow-glow-emerald: 0 0 20px rgba(16, 185, 129, 0.35);
+  --shadow-glow-orange: 0 0 20px rgba(249, 115, 22, 0.35);
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ===== Tokens semánticos (Design System v2 §1.1) — solo código NUEVO =====
+   Valores por tema vía vars; `inline` permite el switch dark/light en runtime. */
+@theme inline {
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-app: var(--bg-app);
+  --color-inputbg: var(--bg-input);
+  --color-subtle: var(--border-subtle);
+  --color-strongbd: var(--border-strong);
+  --color-tprimary: var(--text-primary);
+  --color-tsecondary: var(--text-secondary);
+  --color-tdisabled: var(--text-disabled);
+  --color-action: var(--action-primary);
+  --color-actionhover: var(--action-primary-hover);
+  --color-ok: var(--state-success);
+  --color-warn: var(--state-warning);
+  --color-bad: var(--state-danger);
+  --color-info: var(--state-info);
+}
+
+:root {
+  --bg-app: #F4F7F6;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-input: #F8FAFC;
+  --border-subtle: #E2E8F0;
+  --border-strong: #CBD5E1;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-disabled: #94A3B8;
+  --action-primary: #6366F1;
+  --action-primary-hover: #4F46E5;
+  --state-success: #10B981;
+  --state-warning: #F59E0B;
+  --state-danger: #EF4444;
+  --state-info: #0EA5E9;
+}
+
+.dark {
+  --bg-app: #09090B;
+  --bg-surface: #18181B;
+  --bg-elevated: #202024;
+  --bg-input: #0C0C0F;
+  --border-subtle: #27272A;
+  --border-strong: #3F3F46;
+  --text-primary: #F4F4F5;
+  --text-secondary: #A1A1AA;
+  --text-disabled: #71717A;
+  --action-primary: #6366F1;
+  --action-primary-hover: #4F46E5;
+  --state-success: #10B981;
+  --state-warning: #F59E0B;
+  --state-danger: #EF4444;
+  --state-info: #0EA5E9;
+}
+
+@layer base {
+  :root {
+    --brand-bg: #f4f7f6;
+    --brand-card: #ffffff;
+    --brand-border: #e2e8f0;
+    --brand-text: #0f172a;
+    --brand-muted: #64748b;
+    --brand-green: #10b981;
+    --brand-green-light: #d1fae5;
+    --brand-primary: #6366f1;
+    --brand-primary-light: #e0e7ff;
+    --brand-orange: #f97316;
+  }
+  body {
+    @apply text-slate-800 antialiased;
+    background-color: var(--brand-bg);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    text-rendering: optimizeLegibility;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Focus visible global (DS v2 §3/§11) — nunca eliminar sin reemplazo */
+  :focus-visible {
+    outline: 2px solid #818CF8;
+    outline-offset: 2px;
+  }
+
+  /* Respeto a movimiento reducido (DS v2 §10/§11) */
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-alert,
+    .animate-row,
+    .view-fade,
+    .animate-blob,
+    .skeleton {
+      animation: none !important;
+    }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }
+
+  /* Transición suave al cambiar de tema (Campify Dark x Premium SaaS) */
+  @media (prefers-reduced-motion: no-preference) {
+    body, body * {
+      transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+      transition-duration: 200ms;
+    }
+  }
+
+  /* Blob decorativo animado (presente en KPI cards del mockup) */
+  @keyframes blobBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-5px) scale(1.05); }
+  }
+  .animate-blob { animation: blobBounce 4s infinite ease-in-out; }
+
+  .card-hover { transition: all 0.2s ease-in-out; }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.05);
+  }
+  .shadow-card { box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.03); }
+
+  /* Glassmorphism (Campify Dark x Premium SaaS) — adaptativo claro/oscuro */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .dark .glass-card {
+    background: rgba(24, 24, 27, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .glass-button {
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    transition: all 0.2s ease;
+  }
+  .glass-button:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(99, 102, 241, 0.45);
+    transform: translateY(-2px);
+  }
+  .dark .glass-button {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+  }
+  .dark .glass-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  @keyframes heartbeat-soft {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+  .pulse-alert { animation: heartbeat-soft 1.6s ease-in-out infinite; transform-origin: center; }
+  @keyframes row-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-row { animation: row-in 0.25s ease-out both; }
+  @keyframes view-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .view-fade { animation: view-in 0.3s ease-out backwards; }
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #1f1f23 25%, #27272a 37%, #1f1f23 63%);
+    background-size: 800px 100%;
+    animation: shimmer 1.2s infinite linear;
+  }
+  .detail-grid { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.25s ease-out; }
+  .detail-grid.open { grid-template-rows: 1fr; }
+  .detail-inner { overflow: hidden; }
+
+  /* ===== Tema oscuro Obsidian (referencia #09090b / #18181b / #6366f1 / #f97316) ===== */
+  .dark body { background-color: #09090b; color: #f4f4f5; }
+  .dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+  .dark .bg-slate-100 { background-color: #09090b !important; }
+  .dark .bg-white { background-color: #18181b !important; border-color: #27272a !important; }
+  .dark .bg-slate-50 { background-color: #18181b !important; border-color: #27272a !important; }
+  .dark .bg-slate-200\/80 { background-color: #27272a !important; }
+  .dark .text-slate-900, .dark .text-slate-800 { color: #ffffff !important; }
+  .dark .text-slate-700, .dark .text-slate-600 { color: #c9c9c9 !important; }
+  .dark .text-slate-500, .dark .text-slate-400 { color: #a1a1aa !important; }
+  .dark .border-slate-200, .dark .border-slate-200\/80, .dark .border-slate-100, .dark .border-\[\#e2e8f0\] { border-color: #27272a !important; }
+  .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #27272a !important; }
+  .dark input, .dark select, .dark textarea { background-color: #18181b !important; border-color: #27272a !important; color: #ffffff !important; }
+  .dark input::placeholder { color: #71717a !important; }
+
+  /* Re-mapeo de utilidades hardcodeadas del tema antiguo (#1F1F1F / #333333) */
+  .dark .dark\:bg-\[\#1F1F1F\] { background-color: #18181b !important; }
+  .dark .dark\:bg-\[\#232323\] { background-color: #18181b !important; }
+  .dark .dark\:border-\[\#333333\] { border-color: #27272a !important; }
+  .dark .dark\:hover\:bg-\[\#232323\] { background-color: #27272a !important; }
+  .dark .dark\:hover\:bg-white\/5 { background-color: rgba(255, 255, 255, 0.05) !important; }
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  body * {
+    visibility: hidden;
+  }
+  #ticket-print-area, #ticket-print-area * {
+    visibility: visible;
+  }
+  #ticket-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+  .no-print,
+  .print-hide {
+    display: none !important;
+  }
+  /* ===== Reporte dashboard: flujo multipágina A4 ===== */
+  #dashboard-print-area, #dashboard-print-area * {
+    visibility: visible;
+  }
+  #dashboard-print-area {
+    position: static;
+    width: 100%;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+  /* Las listas con scroll se expanden para imprimir todo el contenido */
+  #dashboard-print-area .max-h-96,
+  #dashboard-print-area .max-h-80,
+  #dashboard-print-area .max-h-72,
+  #dashboard-print-area .max-h-64,
+  #dashboard-print-area .max-h-48,
+  #dashboard-print-area .overflow-y-auto,
+  #dashboard-print-area .overflow-x-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Cada tarjeta entera en lo posible; las tablas fluyen con header repetido */
+  #dashboard-print-area .rounded-2xl {
+    break-inside: avoid-page;
+  }
+  #dashboard-print-area thead {
+    display: table-header-group;
+  }
+  #dashboard-print-area tr {
+    break-inside: avoid-page;
+  }
+  /* Fondos oscuros → blanco para no gastar tinta ni tapar texto */
+  #dashboard-print-area .bg-white,
+  #dashboard-print-area .bg-slate-50,
+  #dashboard-print-area [class*="dark:bg-"] {
+    background-color: #ffffff !important;
+    background-image: none !important;
+    border-color: #e2e8f0 !important;
+  }
+  /* Texto blanco (modo oscuro) → tinta oscura legible */
+  #dashboard-print-area .text-white,
+  #dashboard-print-area .dark\:text-white,
+  #dashboard-print-area .text-slate-900,
+  #dashboard-print-area .text-slate-800 {
+    color: #0f172a !important;
+  }
+  #dashboard-print-area * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+  }
+}
+
+/* Scanner: ocultar el visor propio de html5-qrcode (corchetes blancos).
+   Usamos un solo marco (el verde del modal) alineado con el qrbox real. */
+#barcode-reader #qr-shaded-region,
+#barcode-reader div[id*="qr-shaded"] {
+  display: none !important;
+}
+#barcode-reader video {
+  object-fit: cover;
+}
