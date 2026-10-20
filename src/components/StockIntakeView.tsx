@@ -445,7 +445,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
           </p>
         </div>
         {!activeReceipt && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {canCancel && locations.length >= 2 && (
               <button
                 onClick={() => setShowTransfer((v) => !v)}
@@ -527,7 +527,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <input
               value={txNotes}
               onChange={(e) => setTxNotes(e.target.value)}
@@ -567,7 +567,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
                   : `${lines.length} ${lines.length === 1 ? 'producto' : 'productos'} en el lote · ${destLocationName || 'cargando ubicación…'}`}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setScannerOpen(true)}
                 className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
@@ -767,7 +767,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
                 </span>
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setScannerOpen(true)}
                 className="flex-1 py-3 bg-white hover:bg-slate-100 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-bold transition cursor-pointer"

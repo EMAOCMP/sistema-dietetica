@@ -210,7 +210,7 @@ export function CashCloseView({ profile, showToast }: {
             <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${diff === 0 && counted !== '' ? 'bg-emerald-100 text-emerald-700' : diff !== 0 && counted !== '' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
               Diferencia: {counted === '' ? '—' : money(diff)} {counted !== '' && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={handleSave}
                 disabled={saving || counted === ''}

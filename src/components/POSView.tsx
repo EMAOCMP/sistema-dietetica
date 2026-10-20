@@ -72,38 +72,92 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [mpAuth, setMpAuth] = useState('');
   const [mpLink, setMpLink] = useState('');
   const [mpPreferenceId, setMpPreferenceId] = useState('');
-  const [generatingMpLink, setGeneratingMpLink] = useState(false);
+  const [mpPendingSaleId, setMpPendingSaleId] = useState<string | null>(null);
+  const [mpWaiting, setMpWaiting] = useState(false);
 
-  const handleGenerateMpLink = async () => {
-    const total = totalAmount;
-    if (total <= 0) {
-      if (showToast) showToast('El carrito está vacío.', 'warning');
-      return;
-    }
-    setGeneratingMpLink(true);
-    try {
-      const res = await createMercadoPagoPreference({
-        title: `Venta Dietética (${cart.length} ítems)`,
-        unitPrice: total,
-        quantity: 1,
-        externalReference: `SALE-${Date.now()}`,
-      });
-      setMpLink(res.initPoint);
-      setMpPreferenceId(res.preferenceId || '');
-      if (showToast) {
-        const modo = res.isTest ? '🧪 PRUEBA' : '⚠️ PRODUCCIÓN (cobro real)';
-        const via = res.mode === 'function'
-          ? 'monto exacto'
-          : res.mode === 'api'
-            ? 'API navegador'
-            : 'link estático';
-        showToast(`Link de pago generado [${modo}] (${via}).`, res.isTest ? 'success' : 'warning');
-      }
-    } catch (e: any) {
-      if (showToast) showToast(`Error generando link: ${e?.message || e}`, 'error');
-    } finally {
-      setGeneratingMpLink(false);
-    }
+  const resetMpState = () => {
+    setMpLink('');
+    setMpPreferenceId('');
+    setMpAuth('');
+    setMpPendingSaleId(null);
+    setMpWaiting(false);
+  };
+
+  // El webhook de MP finaliza/cancela la venta → el realtime avisa al POS acá
+  useEffect(() => {
+    if (!mpPendingSaleId) return;
+    const channel = supabase
+      .channel(`mp-sale-${mpPendingSaleId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sales', filter: `id=eq.${mpPendingSaleId}` },
+        (payload) => {
+          const row: any = payload.new || {};
+          if (row.status === 'completed') {
+            setCart([]);
+            resetMpState();
+            fetchProducts();
+            window.dispatchEvent(new Event('dv:sale-completed'));
+            if (showToast) showToast('✅ Pago aprobado. Venta registrada automáticamente.', 'success');
+          } else if (row.status === 'cancelled') {
+            resetMpState();
+            if (showToast) showToast('❌ Pago rechazado. La venta NO se guardó.', 'error');
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpPendingSaleId]);
+
+  // Venta dirigida por pago: genera link + crea venta pendiente (sin stock) + espera el webhook
+  const startMpPayment = async () => {
+    if (mpPendingSaleId) return; // ya hay una venta MP en curso, no duplicar
+    const externalRef = `SALE-${Date.now()}`;
+    const res = await createMercadoPagoPreference({
+      title: `Venta Dietética (${cart.length} ítems)`,
+      unitPrice: totalAmount,
+      quantity: 1,
+      externalReference: externalRef,
+    });
+    const link = res.initPoint;
+
+    const opKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const { data, error } = await supabase.rpc('create_mp_pending_sale', {
+      p_customer_name: customerName || 'Cliente General',
+      p_total_amount: totalAmount,
+      p_items: cart.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.priceType === 'wholesale' ? item.product.wholesale_price : item.product.retail_price,
+        cost_price: item.product.cost_price,
+      })),
+      p_payment: { method: 'mercadopago', ...paymentDetailFields() },
+      p_sale_type: saleType,
+      p_dispatch_type: dispatchType,
+      p_notes: saleNotes || null,
+      p_customer_doc: customerDoc.replace(/\D/g, '') || null,
+      p_customer_iva_cond: customerIvaCond,
+      p_customer_phone: customerPhone.replace(/\D/g, '') || null,
+      p_net_amount: round2(netoFromTotal(totalAmount)),
+      p_iva_amount: round2(ivaFromTotal(totalAmount)),
+      p_profit_amount: totalProfit,
+      p_discount_amount: round2(discountVal),
+      p_idempotency_key: opKey,
+      p_mp_link: link,
+      p_mp_preference_id: res.preferenceId || null,
+      p_mp_external_ref: externalRef,
+    });
+    if (error) throw error;
+    const saleId = Array.isArray(data) ? data?.[0]?.sale_id : data?.sale_id;
+
+    setMpLink(link);
+    setMpPreferenceId(res.preferenceId || '');
+    setMpPendingSaleId(saleId);
+    setMpWaiting(true);
   };
 
   const BANKS_AR = ['Galicia', 'Santander', 'Nación', 'Provincia', 'BBVA', 'Macro', 'ICBC', 'Patagonia', 'HSBC', 'Supervielle', 'Mercado Pago', 'Ualá', 'Brubank', 'Naranja X', 'Otro'];
@@ -665,6 +719,23 @@ export function POSView({ profile, showToast }: POSViewProps) {
       return;
     }
 
+    // Mercado Pago: venta dirigida por pago.
+    // Se crea una venta PENDIENTE (sin stock) y el webhook la finaliza
+    // al aprobar o la cancela al rechazar. No se limpia el carrito acá.
+    if (paymentMethod === 'mercadopago') {
+      console.log('[Sale] mp-flow-start', cart.length, 'items');
+      try {
+        await startMpPayment();
+        if (showToast) showToast('Link generado. Esperando pago del cliente…', 'info');
+      } catch (e: any) {
+        console.log('[Sale] mp-flow-error', e?.message || e);
+        notify('Error generando link Mercado Pago: ' + (e?.message || e), 'error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Modo ONLINE: flujo original
     console.log('[Sale] checkout-start', cart.length, 'items');
     try {
@@ -700,18 +771,6 @@ export function POSView({ profile, showToast }: POSViewProps) {
         paymentMethod,
         paymentDetail,
       });
-
-      // Mercado Pago: persiste datos en sales (el RPC no los recibe por parámetro)
-      if (paymentMethod === 'mercadopago') {
-        const mpCols: Record<string, string> = {
-          mp_status: 'pending',
-          ...(mpLink ? { mp_link: mpLink } : {}),
-          ...(mpPreferenceId ? { mp_preference_id: mpPreferenceId } : {}),
-          ...(mpAuth.trim() ? { mp_auth: mpAuth.trim() } : {}),
-        };
-        supabase.from('sales').update(mpCols).eq('id', saleId)
-          .then(({ error }) => { if (error) console.warn('[MP] no se pudieron guardar los datos MP:', error.message); });
-      }
 
       setSuccessSale({
         id: saleId,
@@ -980,17 +1039,14 @@ export function POSView({ profile, showToast }: POSViewProps) {
                     {mpMode === 'prod' ? '💰 Producción' : '🧪 Prueba'}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleGenerateMpLink}
-                    disabled={generatingMpLink}
-                    className="flex-1 px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center justify-center gap-1 shadow-sm disabled:opacity-50"
-                  >
-                    {generatingMpLink ? <Loader2 size={14} className="animate-spin" /> : null}
-                    <span>Generar Link / QR de Pago</span>
-                  </button>
-                </div>
+                {mpWaiting ? (
+                  <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-xl border border-amber-200 text-amber-800">
+                    <Loader2 size={14} className="animate-spin shrink-0" />
+                    <span className="text-xs font-bold">Esperando pago del cliente… La venta se guarda solo si MP la aprueba.</span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-blue-700 font-semibold">Al apretar <b>COBRAR</b> se genera el link y la venta queda <b>pendiente</b>. Se completa sola con el pago aprobado.</p>
+                )}
                 {mpLink && (
                   <div className="p-2 bg-white rounded-xl border border-sky-100 flex items-center justify-between gap-2">
                     <span className="text-xs font-mono text-slate-600 truncate">{mpLink}</span>
@@ -1007,12 +1063,12 @@ export function POSView({ profile, showToast }: POSViewProps) {
                   </div>
                 )}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">N° autorización / operación MP</label>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">N° autorización / operación MP (opcional)</label>
                   <input
                     type="text"
                     value={mpAuth}
                     onChange={(e) => setMpAuth(e.target.value.slice(0, 30))}
-                    placeholder="Ej: 1234567890"
+                    placeholder="Se completa solo con el pago"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 tnum"
                   />
                 </div>

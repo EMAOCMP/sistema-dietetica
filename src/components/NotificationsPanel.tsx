@@ -170,7 +170,7 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 z-50 w-80 origin-top-right animate-in fade-in-0 zoom-in-95 duration-200">
+          <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-1rem)] origin-top-right animate-in fade-in-0 zoom-in-95 duration-200">
             <div className="bg-white dark:bg-[#1F1F1F] rounded-2xl shadow-xl border border-slate-200 dark:border-[#333333] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-[#333333]">
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">Notificaciones</h4>

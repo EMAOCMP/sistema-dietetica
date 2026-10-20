@@ -56,8 +56,8 @@ export function Login() {
     >
       <div className="absolute inset-0 bg-white/75 backdrop-blur-sm dark:bg-obsidian-950/85"></div>
 
-      <div className="relative z-10 max-w-md w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/80 ring-1 ring-brand-500/20 overflow-hidden p-8 dark:bg-obsidian-800/60 dark:border-white/10">
-        <div className="text-center mb-8">
+      <div className="relative z-10 max-w-md w-full bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/80 ring-1 ring-brand-500/20 overflow-hidden p-6 sm:p-8 dark:bg-obsidian-800/60 dark:border-white/10">
+        <div className="text-center mb-6 sm:mb-8">
           <img src="/logo-512.jpg" alt="Vishal Dietética" className="h-16 mx-auto mb-3 object-contain" />
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight dark:text-white">Dietética Vishal</h1>
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mt-1 dark:text-zinc-400">Control de Stock y Ventas</p>

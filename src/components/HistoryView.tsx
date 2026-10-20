@@ -340,13 +340,13 @@ export function HistoryView() {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Historial y Trazabilidad</h1>
           <p className="text-[#64748b] dark:text-slate-400 text-sm font-medium">Comprobantes internos y facturas ARCA • clic en una fila para ver el detalle</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <div className="bg-white dark:bg-white/5 rounded-xl shadow-sm border border-[#e2e8f0] dark:border-white/10 p-1 flex text-sm font-medium">
             {(['today', 'week', 'month', 'all'] as DateRange[]).map((r) => (
               <button
                 key={r}
                 onClick={() => setDateRange(r)}
-                className={`px-4 py-2 rounded-lg transition-all ${dateRange === r ? 'bg-slate-900 dark:bg-brand-500 text-white shadow-sm' : 'text-[#64748b] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                className={`px-3 md:px-4 py-2 rounded-lg transition-all text-xs md:text-sm ${dateRange === r ? 'bg-slate-900 dark:bg-brand-500 text-white shadow-sm' : 'text-[#64748b] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
               >
                 {r === 'today' ? 'Hoy' : r === 'week' ? 'Semana' : r === 'month' ? 'Mes' : 'Todo'}
               </button>
@@ -426,7 +426,7 @@ export function HistoryView() {
       </div>
 
       {/* KPIs del filtro */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-card rounded-2xl p-4">
           <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Ventas (filtro)</p>
           <p className="text-2xl font-extrabold text-slate-900 dark:text-white tnum">{kpis.count}</p>

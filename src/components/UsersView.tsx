@@ -160,7 +160,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-brand-500/15 flex items-center justify-center">
               <Users size={18} className="text-brand-400" />
             </div>
@@ -181,7 +181,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {([
           { key: 'admin' as const, label: 'Admins', icon: Crown, color: 'text-purple-400', bg: 'bg-purple-500/10' },
           { key: 'supervisor' as const, label: 'Supervisores', icon: Eye, color: 'text-sky-400', bg: 'bg-sky-500/10' },

@@ -1290,7 +1290,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ventas (Tickets)</h3>
             </div>
           </div>
-          <span className="text-3xl font-bold block mb-1 tnum text-[#0f172a] dark:text-white">{stats.salesCount}</span>
+          <span className="text-2xl sm:text-3xl font-bold block mb-1 tnum text-[#0f172a] dark:text-white">{stats.salesCount}</span>
           <span className={`text-xs flex items-center gap-1 font-medium px-2 py-0.5 rounded w-max ${Number(revenueDiffPercent) >= 0 ? 'text-[#10b981] bg-[#d1fae5] dark:text-[#00C853] dark:bg-[#00C853]/10' : 'text-red-500 bg-red-100'}`}>
             <TrendUp size={13} weight="bold" /> {revenueDiffPercent}%                <span className="font-normal ml-1 text-slate-400 dark:text-slate-500">vs período ant.</span>
           </span>
@@ -1324,7 +1324,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ingresos Totales</h3>
             </div>
           </div>
-          <span className="text-3xl font-bold block mb-1 tnum text-[#0f172a] dark:text-white">${stats.revenue.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="text-2xl sm:text-3xl font-bold block mb-1 tnum text-[#0f172a] dark:text-white">${stats.revenue.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           <div className="space-y-2 text-sm pt-3 mt-1 border-t border-slate-100 dark:border-[#333333]">
             <div className="flex justify-between items-center">
                <span className="font-medium text-[#64748b] dark:text-slate-400">Efectivo</span>
@@ -1351,7 +1351,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ganancia Neta</h3>
             </div>
           </div>
-          <span className="text-3xl font-bold block mb-1 tnum text-[#10b981] dark:text-[#00C853]">${stats.profit.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="text-2xl sm:text-3xl font-bold block mb-1 tnum text-[#10b981] dark:text-[#00C853]">${stats.profit.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           <div className="space-y-2 text-sm pt-3 mt-1 border-t border-slate-100 dark:border-[#333333]">
             <div className="flex justify-between items-center">
                <span className="font-medium text-[#64748b] dark:text-slate-400">Margen Global:</span>
@@ -1381,7 +1381,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             </span>
           </div>
           <div className="mb-1 flex items-end gap-2 relative z-10">
-            <span className="text-4xl font-extrabold tnum text-red-500 dark:text-[#FF6B00] dark:text-3xl dark:font-bold">{stats.lowStockCount} <span className="text-sm font-medium text-red-500/80 dark:text-[#9E9E9E] dark:font-normal">ítems</span></span>
+            <span className="text-3xl sm:text-4xl font-extrabold tnum text-red-500 dark:text-[#FF6B00] dark:text-2xl sm:dark:text-3xl dark:font-bold">{stats.lowStockCount} <span className="text-sm font-medium text-red-500/80 dark:text-[#9E9E9E] dark:font-normal">ítems</span></span>
           </div>
           <div className="pt-4 border-t border-red-500/10">
             <span className={`text-xs font-bold ${stats.lowStockCount > 0 ? 'text-red-600 dark:text-[#FF6B00]' : 'text-emerald-600 dark:text-[#00C853]'}`}>
