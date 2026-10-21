@@ -16,7 +16,7 @@ import {
 import { useScanner } from '../hooks/useScanner';
 import { detectFormat, normalizeCode } from '../services/barcodeNormalizer';
 import type { ProductLite, ScanResult } from '../types/scanner.types';
-import { SelectMenu } from '../../../components/SelectMenu';
+import { SelectMenu } from '../../../components/ui/SelectMenu';
 
 function beep() {
   try {
@@ -341,7 +341,7 @@ export function ScannerModal({
           </div>
         )}
         {fileMsg && (
-          <p className="text-center text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{fileMsg}</p>
+          <p className="text-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl px-3 py-2">{fileMsg}</p>
         )}
 
         {/* Diagnóstico: qué ve el lector + autotest (solo tras fallo con foto) */}
@@ -375,7 +375,7 @@ export function ScannerModal({
                   {selfTesting ? 'Probando lector...' : 'Probar lector con código perfecto'}
                 </button>
                 {selfTestResult && (
-                  <p className={`text-center text-[11px] font-bold rounded-xl px-3 py-1.5 ${selfTestResult.ok ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-red-700 bg-red-50 border border-red-200'}`}>
+                  <p className={`text-center text-[11px] font-bold rounded-xl px-3 py-1.5 ${selfTestResult.ok ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30' : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30'}`}>
                     {selfTestResult.ok
                       ? `Lector OK (leyó ${selfTestResult.code}). El problema es la foto, no el lector.`
                       : `Lector con fallas (${selfTestResult.detail}). Avisame con este mensaje.`}
@@ -613,7 +613,7 @@ export function ScannerModal({
             </div>
 
             {error && (
-              <p className="text-center text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              <p className="text-center text-[11px] font-bold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl px-3 py-2">
                 {errorText}{' '}
                 <button
                   onClick={() => { scanner.resetStatus(); void scanner.startCamera(); }}

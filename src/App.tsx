@@ -1,27 +1,67 @@
 import { useEffect, useState, useRef, Suspense, lazy } from 'react';
 import { supabase } from './lib/supabase';
 import type { Profile } from './types';
-import { Login } from './components/Login';
-import { Navbar } from './components/Navbar';
-import { DashboardView } from './components/DashboardView';
-import { POSView } from './components/POSView';
-import { OfflineIndicator } from './components/OfflineIndicator';
-import { NotificationsPanel } from './components/NotificationsPanel';
-import { CommandPalette } from './components/CommandPalette';
-import { MobileTabBar } from './components/MobileTabBar';
-import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar } from '@phosphor-icons/react';
+import { Login } from './components/layout/Login';
+import { Navbar } from './components/layout/Navbar';
+import { DashboardView } from './components/views/DashboardView';
+import { POSView } from './components/views/POSView';
+import { OfflineIndicator } from './components/ui/OfflineIndicator';
+import { NotificationsPanel } from './components/ui/NotificationsPanel';
+import { CommandPalette } from './components/ui/CommandPalette';
+import { MobileTabBar } from './components/layout/MobileTabBar';
+import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar, Question } from '@phosphor-icons/react';
 import { Plus, Check } from 'lucide-react';
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine';
 import { ScannerProvider } from './features/scanner/ScannerProvider';
+import { OnboardingProvider, ProductTour, GuideCenter, SectionHint, useOnboarding, hasCompletedTour } from './features/onboarding';
 
-const ProductsView = lazy(() => import('./components/ProductsView').then(m => ({ default: m.ProductsView })));
-const HistoryView = lazy(() => import('./components/HistoryView').then(m => ({ default: m.HistoryView })));
-const UsersView = lazy(() => import('./components/UsersView').then(m => ({ default: m.UsersView })));
-const StockIntakeView = lazy(() => import('./components/StockIntakeView').then(m => ({ default: m.StockIntakeView })));
-const MyActivityView = lazy(() => import('./components/MyActivityView').then(m => ({ default: m.MyActivityView })));
-const SettingsView = lazy(() => import('./components/SettingsView').then(m => ({ default: m.SettingsView })));
-const CashCloseView = lazy(() => import('./components/CashCloseView').then(m => ({ default: m.CashCloseView })));
-const ReportsView = lazy(() => import('./components/ReportsView').then(m => ({ default: m.ReportsView })));
+/** Botón para abrir el Centro de guías. */
+function TourButton() {
+  const { openGuide } = useOnboarding();
+  return (
+    <button
+      onClick={openGuide}
+      data-tour="help"
+      title="Centro de guías"
+      aria-label="Abrir centro de guías"
+      className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100 dark:bg-obsidian-800 hover:bg-slate-200 dark:hover:bg-obsidian-700 transition-colors cursor-pointer text-slate-500 dark:text-zinc-400 shrink-0"
+    >
+      <Question size={18} weight="bold" />
+    </button>
+  );
+}
+
+/** Auto-inicia el recorrido la primera vez (persiste en localStorage). */
+function TourStarter() {
+  const { startTour, tourOpen } = useOnboarding();
+  useEffect(() => {
+    if (tourOpen || hasCompletedTour()) return;
+    const t = window.setTimeout(() => startTour(), 800);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
+/** Onboarding contextual: sugiere la guía la primera vez que se entra a cada sección. */
+function SectionHintTrigger({ activeTab }: { activeTab: string }) {
+  const { requestSectionHint, tourOpen, guideOpen } = useOnboarding();
+  useEffect(() => {
+    if (tourOpen || guideOpen) return;
+    const t = window.setTimeout(() => requestSectionHint(activeTab), 1600);
+    return () => window.clearTimeout(t);
+  }, [activeTab, tourOpen, guideOpen, requestSectionHint]);
+  return null;
+}
+
+const ProductsView = lazy(() => import('./components/views/ProductsView').then(m => ({ default: m.ProductsView })));
+const HistoryView = lazy(() => import('./components/views/HistoryView').then(m => ({ default: m.HistoryView })));
+const UsersView = lazy(() => import('./components/views/UsersView').then(m => ({ default: m.UsersView })));
+const StockIntakeView = lazy(() => import('./components/views/StockIntakeView').then(m => ({ default: m.StockIntakeView })));
+const MyActivityView = lazy(() => import('./components/views/MyActivityView').then(m => ({ default: m.MyActivityView })));
+const SettingsView = lazy(() => import('./components/views/SettingsView').then(m => ({ default: m.SettingsView })));
+const CashCloseView = lazy(() => import('./components/views/CashCloseView').then(m => ({ default: m.CashCloseView })));
+const ReportsView = lazy(() => import('./components/views/ReportsView').then(m => ({ default: m.ReportsView })));
 
 export function App() {
   const [session, setSession] = useState<any>(null);
@@ -100,10 +140,10 @@ export function App() {
     );
   };
 
-  // Marcar visita a Historial (completa el onboarding del dashboard)
+  // Marcar visitas a secciones (completa el onboarding del dashboard)
   useEffect(() => {
-    if (activeTab === 'history') {
-      try { localStorage.setItem('dv-visited-history', '1'); } catch { /* noop */ }
+    if (activeTab === 'history' || activeTab === 'cashclose' || activeTab === 'reports') {
+      try { localStorage.setItem(`dv-visited-${activeTab}`, '1'); } catch { /* noop */ }
     }
   }, [activeTab]);
 
@@ -198,6 +238,7 @@ export function App() {
   }
 
   return (
+    <OnboardingProvider>
     <ScannerProvider>
       <div className="min-h-screen flex bg-[#f4f7f6] text-slate-800 dark:bg-obsidian-950 dark:text-zinc-200">
       <Navbar
@@ -243,12 +284,14 @@ export function App() {
             <button
               onClick={() => setPaletteOpen(true)}
               title="Buscar en la app"
+              data-tour="search"
               className="sm:hidden text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-lg cursor-pointer dark:text-zinc-400 dark:hover:text-white dark:bg-white/5"
             >
               <MagnifyingGlass size={20} weight="bold" />
             </button>
             <div
               onClick={() => setPaletteOpen(true)}
+              data-tour="search"
               className="relative w-full max-w-xl hidden sm:block group cursor-pointer"
               title="Buscar en la app (Ctrl+K)"
             >
@@ -259,7 +302,7 @@ export function App() {
                 placeholder="Buscar productos, ventas, clientes..."
                 className="w-full bg-white border border-slate-200 text-slate-800 text-sm rounded-xl pl-9 pr-20 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-all dark:bg-obsidian-800 dark:border-obsidian-600 dark:text-zinc-200 cursor-pointer"
               />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none">
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none" data-tour="shortcuts">
                 <kbd className="bg-white dark:bg-obsidian-800 border border-slate-200 dark:border-obsidian-600 shadow-sm px-1.5 py-0.5 rounded text-[10px] text-slate-500 font-mono dark:text-zinc-400">⌘</kbd>
                 <kbd className="bg-white dark:bg-obsidian-800 border border-slate-200 dark:border-obsidian-600 shadow-sm px-1.5 py-0.5 rounded text-[10px] text-slate-500 font-mono dark:text-zinc-400">K</kbd>
               </div>
@@ -269,8 +312,10 @@ export function App() {
           <div className="flex items-center gap-2 ml-auto">
             <NotificationsPanel onNavigate={(tab) => goTo(tab)} />
             <div className="h-7 w-px bg-slate-200 hidden sm:block dark:bg-obsidian-700" />
+            <TourButton />
             <button
               onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              data-tour="theme"
               className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-100 dark:bg-obsidian-800 hover:bg-slate-200 dark:hover:bg-obsidian-700 transition-colors cursor-pointer"
               title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
             >
@@ -282,7 +327,7 @@ export function App() {
               </div>
               <div className="hidden md:block text-right min-w-0">
                 <p className="text-[12px] font-bold text-slate-800 leading-tight truncate dark:text-zinc-200">{profile?.full_name}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider dark:text-zinc-500">{profile?.role}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider dark:text-zinc-400">{profile?.role}</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -374,6 +419,12 @@ export function App() {
       )}
     </div>
     </ScannerProvider>
+    <ProductTour activeTab={activeTab} onNavigate={goTo} />
+    <GuideCenter />
+    <SectionHint />
+    <SectionHintTrigger activeTab={activeTab} />
+    <TourStarter />
+    </OnboardingProvider>
   );
 }
 

@@ -7,13 +7,15 @@
 
 SELECT orden, area, chequeo, estado, detalle
 FROM (
-  -- ===== MERCADO PAGO (prueba de link) =====
-  SELECT 1 AS orden, 'MP' AS area, 'Columnas mp_* en sales (espera 4)' AS chequeo,
-         CASE WHEN COUNT(*) = 4 THEN '✅ OK'
-              ELSE '❌ FALTAN: ' || COUNT(*) || '/4 — correr mercado_pago.sql' END AS estado,
+  -- ===== MERCADO PAGO (flujo link + webhook) =====
+  SELECT 1 AS orden, 'MP' AS area, 'Columnas mp_* en sales (espera 7)' AS chequeo,
+         CASE WHEN COUNT(*) = 7 THEN '✅ OK'
+              WHEN COUNT(*) >= 4 THEN '⚠️ FALTAN ' || (7 - COUNT(*)) || ' — correr mercado_pago.sql + mercado_pago_webhook.sql'
+              ELSE '❌ FALTAN: ' || COUNT(*) || '/7' END AS estado,
          COALESCE(STRING_AGG(column_name, ', ' ORDER BY column_name), 'ninguna') AS detalle
   FROM information_schema.columns
-  WHERE table_schema = 'public' AND table_name = 'sales' AND column_name LIKE 'mp_%'
+  WHERE table_schema = 'public' AND table_name = 'sales'
+    AND column_name IN ('mp_auth','mp_link','mp_preference_id','mp_status','mp_external_ref','mp_payment_id','mp_status_detail')
 
   UNION ALL
   SELECT 2, 'MP', 'Tabla sales (registrar venta)',
@@ -100,5 +102,32 @@ FROM (
          'products, locations, inventory'
   FROM information_schema.tables
   WHERE table_schema = 'public' AND table_name = 'products'
+
+  -- ===== MERCADO PAGO (venta dirigida por pago) =====
+  UNION ALL
+  SELECT 13, 'MP', 'RPC create_mp_pending_sale',
+         CASE WHEN COUNT(*) > 0 THEN '✅ OK' ELSE '❌ FALTA — correr mp_pending_sale_flow.sql' END,
+         'crea la venta pendiente al generar el link'
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public' AND p.proname = 'create_mp_pending_sale'
+
+  UNION ALL
+  SELECT 14, 'MP', 'RPC finalize_mp_sale / cancel_mp_sale',
+         CASE WHEN COUNT(DISTINCT p.proname) = 2 THEN '✅ OK'
+              ELSE '❌ FALTAN — correr mp_pending_sale_flow.sql' END,
+         'finaliza (descuenta stock) o cancela la venta según el pago'
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public' AND p.proname IN ('finalize_mp_sale','cancel_mp_sale')
+
+  UNION ALL
+  SELECT 15, 'MP', 'Realtime en sales',
+         CASE WHEN EXISTS (
+                SELECT 1 FROM pg_publication_tables
+                WHERE pubname = 'supabase_realtime'
+                  AND schemaname = 'public'
+                  AND tablename = 'sales'
+              ) THEN '✅ OK'
+              ELSE '⚠️ NO — correr realtime_sales.sql (el POS usará polling)' END,
+         'aviso instantáneo del pago en el POS'
 ) AS checks
 ORDER BY orden;

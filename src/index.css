@@ -9,11 +9,15 @@
   --color-obsidian-800: #18181b;
   --color-obsidian-700: #27272a;
   --color-obsidian-600: #3f3f46;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
   --color-brand-300: #a5b4fc;
   --color-brand-400: #818cf8;
   --color-brand-500: #6366f1;
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
   --color-accent-orange: #f97316;
   --color-accent-emerald: #10b981;
   --shadow-glow-brand: 0 0 20px rgba(99, 102, 241, 0.35);
@@ -97,7 +101,29 @@
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     text-rendering: optimizeLegibility;
+    overflow-wrap: break-word;
   }
+
+  /* ==== Base móvil / accesibilidad (global) ==== */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem; /* deja aire bajo el header sticky al saltar a anclas */
+  }
+  /* Sin destello azul al tocar en móvil */
+  * { -webkit-tap-highlight-color: transparent; }
+  /* Selección de texto acorde a la marca */
+  ::selection { background: rgba(99, 102, 241, 0.28); }
+  /* Áreas seguras (notch / barra gestual) */
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  /* Objetivo táctil mínimo (44px) */
+  .tap-target { min-height: 44px; min-width: 44px; }
+  /* Scrollable horizontal sin barra visible (chips, tabs) */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
@@ -112,6 +138,7 @@
 
   /* Respeto a movimiento reducido (DS v2 §10/§11) */
   @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
     .pulse-alert,
     .animate-row,
     .view-fade,
@@ -150,6 +177,12 @@
   .card-hover:hover {
     transform: translateY(-2px);
     box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.05);
+  }
+  /* En pantallas táctiles no hay hover real: evitamos el "hover pegado" */
+  @media (hover: none) {
+    .card-hover:hover,
+    .glass-button:hover { transform: none; }
+    .card-hover:active { transform: scale(0.99); }
   }
   .shadow-card { box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.03); }
 
@@ -228,7 +261,7 @@
   .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
   .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #27272a !important; }
   .dark input, .dark select, .dark textarea { background-color: #18181b !important; border-color: #27272a !important; color: #ffffff !important; }
-  .dark input::placeholder { color: #71717a !important; }
+  .dark input::placeholder { color: #8b8b93 !important; }
 
   /* Re-mapeo de utilidades hardcodeadas del tema antiguo (#1F1F1F / #333333) */
   .dark .dark\:bg-\[\#1F1F1F\] { background-color: #18181b !important; }
