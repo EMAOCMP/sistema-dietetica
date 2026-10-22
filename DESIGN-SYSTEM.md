@@ -232,9 +232,9 @@ src/
 │   ├── views/     → pantallas completas (Dashboard, POS, Products, History, Reports…)
 │   └── charts/    → visualizaciones (SalesTrend, RevenueBreakdown, CategoryProfits…)
 ├── features/
-│   ├── onboarding/→ ProductTour, ContextualTooltip, EmptyState, OnboardingProvider
+│   ├── onboarding/→ GuideCenter, ProductTour, SectionHint, ContextualTooltip, EmptyState, OnboardingProvider, progressStore
 │   └── scanner/   → ScannerProvider, ScannerModal, engines/, services/, hooks/
-├── lib/           → lógica de negocio y acceso a datos (supabase, sales, sync, export…)
+├── lib/           → lógica de negocio y acceso a datos (supabase, sales, sync, export, onboardingProgress…)
 ├── hooks/         → hooks reutilizables (useOnlineStatus)
 └── index.css      → TOKENS (fuente de verdad del DS)
 ```
@@ -433,16 +433,49 @@ Panel lateral con lista de avisos, marca de no leídos y acciones por ítem.
 
 ### 4.13 Onboarding
 
+El "Centro de guías" es un **product tour / coach marks**: overlay oscuro con spotlight sobre el elemento real (`data-tour="..."`), tarjeta explicativa y navegación automática entre secciones. No es documentación estática.
+
 | Pieza | Componente | Persistencia |
 | --- | --- | --- |
-| Tour de producto | `features/onboarding/ProductTour.tsx` | `localStorage['dv-tour-done-v1']` |
-| Tooltip contextual | `features/onboarding/ContextualTooltip.tsx` | `localStorage['dv-tip-<key>']` |
+| Índice de guías | `features/onboarding/GuideCenter.tsx` | `user_onboarding_progress` + local |
+| Tour de producto | `features/onboarding/ProductTour.tsx` | ídem |
+| Aviso contextual | `features/onboarding/SectionHint.tsx` | ídem |
+| Tooltip contextual | `features/onboarding/ContextualTooltip.tsx` | ídem |
 | Estado vacío | `features/onboarding/EmptyState.tsx` | — |
 | Provider | `OnboardingProvider` (`useOnboarding()`) | — |
+| Estado | `features/onboarding/progressStore.ts` | local + nube |
+| Posición del cartel | `features/onboarding/tipPosition.ts` (`computeTipBox`) | — |
 
-- El tour se lanza automáticamente 800 ms después del login (`src/App.tsx:38`) y se puede relanzar con el botón redondo de `App.tsx`.
+**Estado (`OnboardingProgress`)**
+
+| Campo | Significado |
+| --- | --- |
+| `tourDone` | Terminó el tour inicial o el recorrido completo |
+| `chapters[]` | Guías por sección completadas |
+| `sections[]` | Secciones cuyo aviso contextual ya se mostró |
+| `tips[]` | Tooltips contextuales ya vistos |
+| `visited[]` | Secciones visitadas (checklist del dashboard) |
+| `checklistHidden` | El checklist de inicio fue ocultado |
+
+**Persistencia en dos capas**
+
+- **Local**: `localStorage['dv-onboarding-progress-v1']` (JSON). Es la caché inmediata y la cola offline. Las claves viejas (`dv-tour-done-v1`, `dv-chapter-done-*`, `dv-section-seen-*`, `dv-tip-*`, `dv-visited-*`) se migran automáticamente la primera vez.
+- **Nube**: tabla `user_onboarding_progress` (`supabase/onboarding_progress.sql`), una fila por usuario. El merge se hace en el servidor con `merge_onboarding_progress`, que **une** (nunca pisa) y por eso un write offline viejo no borra progreso más nuevo. `p_reset = true` sobrescribe: lo usa "Reiniciar progreso".
+
+Reglas:
+
+- El tour se lanza automáticamente 800 ms después del login, **esperando a que termine la hidratación** (`ready` del provider) para no repetirlo en un dispositivo donde ya se completó.
 - Los objetivos del tour se marcan con `data-tour="sidebar"` (y equivalentes) en el DOM.
 - El tooltip contextual abre con `Info` de 13 px, panel `w-56 sm:w-64 glass-card rounded-2xl p-3.5`, y se marca como visto la primera vez que se abre.
+- Si `localStorage` está bloqueado (modo privado) el estado vive solo en memoria y el tour no se reinicia en cada recarga.
+
+**Carteles del tour (coach marks)**
+
+- Fondo **opaco** (`bg-white dark:bg-[#1F1F1F]` + borde), nunca `glass-card`: el elemento resaltado queda sin oscurecer detrás del cartel y el `backdrop-blur` lo convertía en una mancha borrosa.
+- Ancho fijo 340 px (desktop); en mobile, hoja inferior a 12 px de los bordes.
+- Cabecera: chip de ícono `w-8 h-8 rounded-xl bg-brand-500/15` + nombre de la guía en mayúsculas (`text-[10px] font-extrabold uppercase tracking-widest`) + "Paso X de Y".
+- Spotlight: `boxShadow: 0 0 0 2px rgba(99,102,241,.95), 0 0 0 7px rgba(99,102,241,.22), 0 0 0 9999px rgba(2,6,23,.74)` → halo índigo que marca el elemento.
+- Posición: `computeTipBox()` elige el lado pedido (top/bottom/left/right) y **evita tapar el elemento resaltado**; si no cabe, prueba los otros lados y, como último recurso, elige la posición que menos lo superpone. Nunca queda bajo el header de la app (`TOP_SAFE = 76`).
 
 ### 4.14 Escáner y balanza (`features/scanner/`)
 

@@ -47,7 +47,7 @@ export function ContextualTooltip({ tipKey, title, children, trigger, className 
         {trigger || <Info size={13} />}
       </button>
       {open && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-56 sm:w-64 glass-card rounded-2xl p-3.5 shadow-2xl origin-top animate-in fade-in-0 zoom-in-95 duration-150">
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-56 sm:w-64 rounded-2xl bg-white dark:bg-[#1F1F1F] border border-slate-200 dark:border-[#333333] p-3.5 shadow-[0_20px_50px_-12px_rgba(2,6,23,0.4)] origin-top animate-in fade-in-0 zoom-in-95 duration-150">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight">{title}</p>
             <button
@@ -59,7 +59,7 @@ export function ContextualTooltip({ tipKey, title, children, trigger, className 
               <X size={13} />
             </button>
           </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">{children}</div>
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">{children}</div>
         </div>
       )}
     </div>

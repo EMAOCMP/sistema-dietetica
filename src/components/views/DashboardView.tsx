@@ -69,7 +69,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ setActiveTab, profile, showToast }: DashboardViewProps) {
-  const { openGuide } = useOnboarding();
+  const { openGuide, hasVisitedSection, isChecklistHidden, hideChecklist } = useOnboarding();
   const [localToast, setLocalToast] = useState<string | null>(null);
   const localTimer = useRef<number | null>(null);
   const notify = (msg: string, kind: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -141,9 +141,6 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
   const [expiringProducts, setExpiringProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertDismissed, setAlertDismissed] = useState(false);
-  const [onboardingHidden, setOnboardingHidden] = useState(() => {
-    try { return localStorage.getItem('dv-onboarding-hidden') === '1'; } catch { return false; }
-  });
 
   // Modals state
   const [activeModal, setActiveModal] = useState<'sales' | 'revenue' | 'profit' | 'lastTicket' | 'bestSellers' | 'categories' | 'hourly' | 'stock' | null>(null);
@@ -1401,13 +1398,10 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       </div>
 
       {/* Checklist de Onboarding */}
-      {!onboardingHidden && (() => {
-        let visitedHistory = false;
-        try { visitedHistory = localStorage.getItem('dv-visited-history') === '1'; } catch { /* noop */ }
-        let visitedCashClose = false;
-        try { visitedCashClose = localStorage.getItem('dv-visited-cashclose') === '1'; } catch { /* noop */ }
-        let visitedReports = false;
-        try { visitedReports = localStorage.getItem('dv-visited-reports') === '1'; } catch { /* noop */ }
+      {!isChecklistHidden() && (() => {
+        const visitedHistory = hasVisitedSection('history');
+        const visitedCashClose = hasVisitedSection('cashclose');
+        const visitedReports = hasVisitedSection('reports');
         const steps = [
           { done: stats.totalProducts > 0, title: 'Cargar tu primer producto', sub: stats.totalProducts > 0 ? `${stats.totalProducts} productos cargados` : 'Agregá tu catálogo y stock', action: () => setActiveTab('products'), actionLabel: 'Ir a Productos' },
           { done: stats.salesCount > 0, title: 'Registrar tu primera venta', sub: stats.salesCount > 0 ? `${stats.salesCount} ventas realizadas` : 'Operá desde la caja', action: () => setActiveTab('pos'), actionLabel: 'Ir al POS' },
@@ -1430,7 +1424,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               <p className="text-brand-200 text-xs sm:text-sm mt-1">Completá estos pasos para dejar tu dietética andando.</p>
             </div>
             <button
-              onClick={() => { setOnboardingHidden(true); try { localStorage.setItem('dv-onboarding-hidden', '1'); } catch {} }}
+              onClick={hideChecklist}
               className="text-brand-200 hover:text-white bg-black/20 p-1.5 rounded-lg cursor-pointer self-start sm:self-auto"
               title="Ocultar checklist"
             >

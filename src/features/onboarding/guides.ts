@@ -31,6 +31,12 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   { id: 'settings', title: 'Configuración', desc: 'Datos del negocio, IVA, Mercado Pago, respaldos y ayuda.', level: 'avanzado', minutes: 1 },
 ];
 
+/**
+ * Secciones que el usuario tiene que pisar para completar el checklist de
+ * inicio del dashboard. Se marcan como "visitadas" al entrar a ellas.
+ */
+export const CHECKLIST_SECTIONS: string[] = ['history', 'cashclose', 'reports'];
+
 export const TOUR_STEPS: TourStep[] = [
   // ── Global (header / navegación) ────────────────────────────────
   {

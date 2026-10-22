@@ -13,7 +13,7 @@ import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar, Ques
 import { Plus, Check } from 'lucide-react';
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine';
 import { ScannerProvider } from './features/scanner/ScannerProvider';
-import { OnboardingProvider, ProductTour, GuideCenter, SectionHint, useOnboarding, hasCompletedTour } from './features/onboarding';
+import { OnboardingProvider, ProductTour, GuideCenter, SectionHint, useOnboarding, hasCompletedTour, CHECKLIST_SECTIONS } from './features/onboarding';
 
 /** Botón para abrir el Centro de guías. */
 function TourButton() {
@@ -31,26 +31,36 @@ function TourButton() {
   );
 }
 
-/** Auto-inicia el recorrido la primera vez (persiste en localStorage). */
+/** Auto-inicia el recorrido la primera vez (persiste en localStorage + nube). */
 function TourStarter() {
-  const { startTour, tourOpen } = useOnboarding();
+  const { startTour, tourOpen, ready } = useOnboarding();
   useEffect(() => {
-    if (tourOpen || hasCompletedTour()) return;
+    if (!ready || tourOpen || hasCompletedTour()) return;
     const t = window.setTimeout(() => startTour(), 800);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready, tourOpen]);
   return null;
 }
 
 /** Onboarding contextual: sugiere la guía la primera vez que se entra a cada sección. */
 function SectionHintTrigger({ activeTab }: { activeTab: string }) {
-  const { requestSectionHint, tourOpen, guideOpen } = useOnboarding();
+  const { requestSectionHint, tourOpen, guideOpen, ready } = useOnboarding();
   useEffect(() => {
-    if (tourOpen || guideOpen) return;
+    if (!ready || tourOpen || guideOpen) return;
     const t = window.setTimeout(() => requestSectionHint(activeTab), 1600);
     return () => window.clearTimeout(t);
-  }, [activeTab, tourOpen, guideOpen, requestSectionHint]);
+  }, [activeTab, tourOpen, guideOpen, ready, requestSectionHint]);
+  return null;
+}
+
+/** Marca las secciones visitadas (alimenta el checklist de inicio del dashboard). */
+function VisitedMarker({ activeTab }: { activeTab: string }) {
+  const { markSectionVisited } = useOnboarding();
+  useEffect(() => {
+    if (!CHECKLIST_SECTIONS.includes(activeTab)) return;
+    markSectionVisited(activeTab);
+  }, [activeTab, markSectionVisited]);
   return null;
 }
 
@@ -139,13 +149,6 @@ export function App() {
       kind === 'warning' || kind === 'error' ? 6000 : 3500
     );
   };
-
-  // Marcar visitas a secciones (completa el onboarding del dashboard)
-  useEffect(() => {
-    if (activeTab === 'history' || activeTab === 'cashclose' || activeTab === 'reports') {
-      try { localStorage.setItem(`dv-visited-${activeTab}`, '1'); } catch { /* noop */ }
-    }
-  }, [activeTab]);
 
   const fetchProfile = async (user: any) => {
     try {
@@ -238,7 +241,7 @@ export function App() {
   }
 
   return (
-    <OnboardingProvider>
+    <OnboardingProvider userId={profile?.id}>
     <ScannerProvider>
       <div className="min-h-screen flex bg-[#f4f7f6] text-slate-800 dark:bg-obsidian-950 dark:text-zinc-200">
       <Navbar
@@ -423,6 +426,7 @@ export function App() {
     <GuideCenter />
     <SectionHint />
     <SectionHintTrigger activeTab={activeTab} />
+    <VisitedMarker activeTab={activeTab} />
     <TourStarter />
     </OnboardingProvider>
   );

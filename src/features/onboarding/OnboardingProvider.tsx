@@ -1,25 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { GuideId } from './guides';
 import { GUIDE_SECTIONS } from './guides';
-
-const TOUR_KEY = 'dv-tour-done-v1';
-const TIP_PREFIX = 'dv-tip-';
-const SECTION_PREFIX = 'dv-section-seen-';
-const CHAPTER_PREFIX = 'dv-chapter-done-';
-
-function readFlag(key: string): boolean {
-  try { return localStorage.getItem(key) === '1'; } catch { return false; }
-}
-
-function writeFlag(key: string, value = true) {
-  try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* noop */ }
-}
+import {
+  EMPTY_PROGRESS,
+  clearLocalProgress,
+  loadLocalProgress,
+  mergeProgress,
+  saveLocalProgress,
+  type OnboardingProgress,
+} from './progressStore';
+import { fetchRemoteProgress, pushRemoteProgress } from '../../lib/onboardingProgress';
 
 interface OnboardingContextValue {
   tourOpen: boolean;
   tourStep: number;
   activeGuide: GuideId;
   guideOpen: boolean;
+  /** true cuando el estado local ya se combinó con el de la nube. */
+  ready: boolean;
   openGuide: () => void;
   closeGuide: () => void;
   startTour: (guideId?: GuideId) => void;
@@ -34,41 +32,101 @@ interface OnboardingContextValue {
   dismissHint: () => void;
   hasSeenSection: (id: string) => boolean;
   markSectionSeen: (id: string) => void;
+  hasVisitedSection: (id: string) => boolean;
+  markSectionVisited: (id: string) => void;
   hasSeenTip: (key: string) => boolean;
   markTipSeen: (key: string) => void;
+  isChecklistHidden: () => boolean;
+  hideChecklist: () => void;
   resetProgress: () => void;
 }
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+interface OnboardingProviderProps {
+  /** Id del usuario autenticado. Si falta, el progreso queda solo en el dispositivo. */
+  userId?: string | null;
+  children: ReactNode;
+}
+
+function toRecord(ids: string[]): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const id of ids) out[id] = true;
+  return out;
+}
+
+/** Agrega un id a una lista sin mutarla (devuelve la misma si ya estaba). */
+function addTo(list: string[], id: string): string[] {
+  return list.includes(id) ? list : [...list, id];
+}
+
+export function OnboardingProvider({ userId, children }: OnboardingProviderProps) {
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [activeGuide, setActiveGuide] = useState<GuideId>('inicio');
   const [guideOpen, setGuideOpen] = useState(false);
   const [hintSection, setHintSection] = useState<string | null>(null);
 
-  const [tipsSeen, setTipsSeen] = useState<Record<string, boolean>>(() => {
-    const seen: Record<string, boolean> = {};
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(TIP_PREFIX)) seen[k.slice(TIP_PREFIX.length)] = readFlag(k);
-      }
-    } catch { /* noop */ }
-    return seen;
-  });
+  // Estado canónico: una sola fuente de verdad, replicada a local + nube.
+  const [progress, setProgress] = useState<OnboardingProgress>(() => loadLocalProgress());
+  const progressRef = useRef(progress);
+  const [hydrated, setHydrated] = useState(false);
+  /** El próximo push a la nube debe sobrescribir en vez de unir. */
+  const resetPendingRef = useRef(false);
 
-  const [completedChapters, setCompletedChapters] = useState<Record<string, boolean>>(() => {
-    const done: Record<string, boolean> = {};
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(CHAPTER_PREFIX)) done[k.slice(CHAPTER_PREFIX.length)] = readFlag(k);
+  useEffect(() => { progressRef.current = progress; }, [progress]);
+
+  // Espejo local: se escribe apenas cambia el estado (cache + cola offline).
+  useEffect(() => { saveLocalProgress(progress); }, [progress]);
+
+  /**
+   * Aplica un cambio al progreso. Si el estado no cambia realmente, devuelve
+   * el mismo objeto: evita re-renders y pushes innecesarios a la nube.
+   */
+  const mutate = useCallback((fn: (p: OnboardingProgress) => OnboardingProgress) => {
+    setProgress((prev) => {
+      const next = fn(prev);
+      return next === prev ? prev : next;
+    });
+  }, []);
+
+  /* ── Hidratación desde la nube ─────────────────────────────────────── */
+  useEffect(() => {
+    if (!userId) {
+      setHydrated(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const remote = await fetchRemoteProgress(userId);
+      if (cancelled) return;
+      if (remote) {
+        setProgress((prev) => {
+          const merged = mergeProgress(prev, remote);
+          return merged === prev ? prev : merged;
+        });
       }
-    } catch { /* noop */ }
-    return done;
-  });
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  /* ── Push a la nube ────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!userId || !hydrated) return;
+    const isReset = resetPendingRef.current;
+    void pushRemoteProgress(userId, progress, isReset).then((ok) => {
+      if (ok) resetPendingRef.current = false;
+    });
+  }, [userId, hydrated, progress]);
+
+  // Si estaba offline, reintenta al volver la conexión.
+  useEffect(() => {
+    if (!userId) return;
+    const onOnline = () => { void pushRemoteProgress(userId, progressRef.current); };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [userId]);
 
   const startTour = useCallback((guideId: GuideId = 'inicio') => {
     setActiveGuide(guideId);
@@ -82,13 +140,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setTourOpen(false);
     setTourStep(0);
     if (activeGuide === 'inicio' || activeGuide === 'completa') {
-      writeFlag(TOUR_KEY);
+      mutate((p) => (p.tourDone ? p : { ...p, tourDone: true }));
     } else {
-      writeFlag(CHAPTER_PREFIX + activeGuide);
-      writeFlag(SECTION_PREFIX + activeGuide);
-      setCompletedChapters((prev) => ({ ...prev, [activeGuide]: true }));
+      mutate((p) => {
+        const chapters = addTo(p.chapters, activeGuide);
+        const sections = addTo(p.sections, activeGuide);
+        if (chapters === p.chapters && sections === p.sections) return p;
+        return { ...p, chapters, sections };
+      });
     }
-  }, [activeGuide]);
+  }, [activeGuide, mutate]);
 
   const nextStep = useCallback(() => setTourStep((s) => s + 1), []);
   const prevStep = useCallback(() => setTourStep((s) => Math.max(0, s - 1)), []);
@@ -96,50 +157,54 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const openGuide = useCallback(() => { setGuideOpen(true); setHintSection(null); }, []);
   const closeGuide = useCallback(() => setGuideOpen(false), []);
 
-  const hasSeenSection = useCallback((id: string) => readFlag(SECTION_PREFIX + id), []);
+  const hasSeenSection = useCallback((id: string) => progress.sections.includes(id), [progress.sections]);
 
   const markSectionSeen = useCallback((id: string) => {
-    writeFlag(SECTION_PREFIX + id);
-  }, []);
+    mutate((p) => (p.sections.includes(id) ? p : { ...p, sections: addTo(p.sections, id) }));
+  }, [mutate]);
+
+  const hasVisitedSection = useCallback((id: string) => progress.visited.includes(id), [progress.visited]);
+
+  const markSectionVisited = useCallback((id: string) => {
+    mutate((p) => (p.visited.includes(id) ? p : { ...p, visited: addTo(p.visited, id) }));
+  }, [mutate]);
 
   const requestSectionHint = useCallback((id: string) => {
     if (!GUIDE_SECTIONS.some((s) => s.id === id)) return;
     if (tourOpen || guideOpen) return;
-    if (readFlag(SECTION_PREFIX + id)) return;
+    if (progressRef.current.sections.includes(id)) return;
     setHintSection((current) => current ?? id);
   }, [tourOpen, guideOpen]);
 
   const dismissHint = useCallback(() => {
-    if (hintSection) writeFlag(SECTION_PREFIX + hintSection);
+    const id = hintSection;
     setHintSection(null);
-  }, [hintSection]);
+    if (!id) return;
+    mutate((p) => (p.sections.includes(id) ? p : { ...p, sections: addTo(p.sections, id) }));
+  }, [hintSection, mutate]);
 
-  const isChapterDone = useCallback((id: string) => !!completedChapters[id], [completedChapters]);
+  const isChapterDone = useCallback((id: string) => progress.chapters.includes(id), [progress.chapters]);
+
   const markChapterDone = useCallback((id: string) => {
-    writeFlag(CHAPTER_PREFIX + id);
-    setCompletedChapters((prev) => ({ ...prev, [id]: true }));
-  }, []);
+    mutate((p) => (p.chapters.includes(id) ? p : { ...p, chapters: addTo(p.chapters, id) }));
+  }, [mutate]);
 
-  const hasSeenTip = useCallback((key: string) => !!tipsSeen[key], [tipsSeen]);
+  const hasSeenTip = useCallback((key: string) => progress.tips.includes(key), [progress.tips]);
+
   const markTipSeen = useCallback((key: string) => {
-    setTipsSeen((prev) => ({ ...prev, [key]: true }));
-    writeFlag(TIP_PREFIX + key);
-  }, []);
+    mutate((p) => (p.tips.includes(key) ? p : { ...p, tips: addTo(p.tips, key) }));
+  }, [mutate]);
+
+  const isChecklistHidden = useCallback(() => progress.checklistHidden, [progress.checklistHidden]);
+
+  const hideChecklist = useCallback(() => {
+    mutate((p) => (p.checklistHidden ? p : { ...p, checklistHidden: true }));
+  }, [mutate]);
 
   const resetProgress = useCallback(() => {
-    try {
-      const keys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && (k.startsWith(TIP_PREFIX) || k.startsWith(SECTION_PREFIX) || k.startsWith(CHAPTER_PREFIX))) {
-          keys.push(k);
-        }
-      }
-      keys.forEach((k) => localStorage.removeItem(k));
-      localStorage.removeItem(TOUR_KEY);
-    } catch { /* noop */ }
-    setTipsSeen({});
-    setCompletedChapters({});
+    clearLocalProgress();
+    resetPendingRef.current = true;
+    setProgress({ ...EMPTY_PROGRESS });
     setHintSection(null);
   }, []);
 
@@ -148,18 +213,26 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     if (tourOpen || guideOpen) setHintSection(null);
   }, [tourOpen, guideOpen]);
 
+  const completedChapters = useMemo(() => toRecord(progress.chapters), [progress.chapters]);
+
   const value = useMemo<OnboardingContextValue>(() => ({
-    tourOpen, tourStep, activeGuide, guideOpen, openGuide, closeGuide,
+    tourOpen, tourStep, activeGuide, guideOpen, ready: hydrated, openGuide, closeGuide,
     startTour, endTour, nextStep, prevStep,
     completedChapters, isChapterDone, markChapterDone,
     hintSection, requestSectionHint, dismissHint, hasSeenSection, markSectionSeen,
-    hasSeenTip, markTipSeen, resetProgress,
+    hasVisitedSection, markSectionVisited,
+    hasSeenTip, markTipSeen,
+    isChecklistHidden, hideChecklist,
+    resetProgress,
   }), [
-    tourOpen, tourStep, activeGuide, guideOpen, openGuide, closeGuide,
+    tourOpen, tourStep, activeGuide, guideOpen, hydrated, openGuide, closeGuide,
     startTour, endTour, nextStep, prevStep,
     completedChapters, isChapterDone, markChapterDone,
     hintSection, requestSectionHint, dismissHint, hasSeenSection, markSectionSeen,
-    hasSeenTip, markTipSeen, resetProgress,
+    hasVisitedSection, markSectionVisited,
+    hasSeenTip, markTipSeen,
+    isChecklistHidden, hideChecklist,
+    resetProgress,
   ]);
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
@@ -173,5 +246,5 @@ export function useOnboarding(): OnboardingContextValue {
 
 /** Helper: true si el tour ya se completó (o se saltó). */
 export function hasCompletedTour(): boolean {
-  try { return localStorage.getItem(TOUR_KEY) === '1'; } catch { return true; }
+  return loadLocalProgress().tourDone;
 }

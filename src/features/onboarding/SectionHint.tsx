@@ -28,7 +28,7 @@ export function SectionHint() {
       aria-live="polite"
       className="fixed left-3 right-3 sm:right-auto sm:left-6 bottom-[calc(88px_+_env(safe-area-inset-bottom))] lg:bottom-6 z-[90] sm:max-w-sm animate-row"
     >
-      <div className="glass-card rounded-2xl border border-brand-500/30 p-3.5 shadow-2xl">
+      <div className="rounded-2xl bg-white dark:bg-[#1F1F1F] border border-brand-500/30 p-3.5 shadow-[0_20px_50px_-12px_rgba(2,6,23,0.4)]">
         <div className="flex items-start gap-2.5">
           <span className="w-8 h-8 rounded-xl bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center shrink-0">
             <Compass size={16} />
