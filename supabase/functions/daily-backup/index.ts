@@ -9,6 +9,9 @@
 // Programación: supabase/backup_automatico.sql (pg_cron a las 04 ART).
 // Variables (automáticas en Supabase): SUPABASE_URL,
 // SUPABASE_SERVICE_ROLE_KEY.
+// Secret OBLIGATORIO:
+//   BACKUP_TOKEN  → token compartido con el cron (ver backup_automatico.sql).
+//   Sin este secret la función responde 503 y no se puede disparar desde fuera.
 // ============================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -30,9 +33,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Solo se admite POST (lo usa pg_cron).
+    if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
+
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) return json({ error: "Faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" }, 503);
+
+    // Autenticación: el secret BACKUP_TOKEN debe coincidir con el header.
+    const expected = Deno.env.get("BACKUP_TOKEN");
+    if (!expected) {
+      return json({ error: "Falta el secret BACKUP_TOKEN (Edge Functions → Secrets)" }, 503);
+    }
+    const provided = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (provided !== expected) return json({ error: "No autorizado" }, 401);
 
     const admin = createClient(url, key);
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();

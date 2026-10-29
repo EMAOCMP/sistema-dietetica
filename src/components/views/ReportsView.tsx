@@ -18,12 +18,17 @@ import {
   type ReportExpense,
 } from '../../lib/reportAggregation';
 import { downloadCsv, stampName } from '../../lib/exportCsv';
-import { downloadReportsPdf } from '../../lib/reportPdf';
+import {
+  canDeleteExpenses,
+  canRecordExpenses,
+  canViewReports,
+} from '../../lib/permissions';
+import { fmtMoney0 } from '../../lib/format';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-const money0 = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
+const money0 = (n: number) => fmtMoney0(n);
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -83,8 +88,9 @@ export function ReportsView({ profile, showToast }: {
   const [expCat, setExpCat] = useState('otro');
   const [savingExp, setSavingExp] = useState(false);
 
-  const canManage = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
-  const isAdmin = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
+  const canManage = canViewReports(profile?.role);
+  const canAddExpense = canRecordExpenses(profile?.role);
+  const isAdmin = canDeleteExpenses(profile?.role);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -234,7 +240,9 @@ export function ReportsView({ profile, showToast }: {
     notify('CSV descargado.', 'success');
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
+    // Import dinámico: jsPDF pesa ~430 KB y solo hace falta al exportar.
+    const { downloadReportsPdf } = await import('../../lib/reportPdf');
     downloadReportsPdf({
       periodo: periodoTexto,
       rows: displayRows.map((r) => ({
@@ -472,6 +480,10 @@ export function ReportsView({ profile, showToast }: {
           <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-3 text-xs font-semibold text-amber-700 dark:text-amber-400">
             La tabla <code>expenses</code> todavía no existe. Ejecutá <code>supabase/reportes_mejoras.sql</code> en el
             SQL Editor de Supabase para registrar gastos y ver la ganancia neta.
+          </div>
+        ) : !canAddExpense ? (
+          <div className="bg-slate-50 dark:bg-[#232323] border border-slate-200 dark:border-[#333333] rounded-xl p-3 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+            Solo administradores y supervisores pueden registrar gastos del negocio.
           </div>
         ) : (
           <>

@@ -18,8 +18,11 @@ export function isValidTime(hhmm: string): boolean {
 }
 
 export function formatHour(h: number): string {
-  const hh = Math.floor(h);
-  const mm = Math.round((h - hh) * 60);
+  // Normaliza: 8.999 → "9:00" (sin overflow de minutos a 60).
+  let totalMinutes = Math.round(h * 60);
+  if (!Number.isFinite(totalMinutes)) return '0:00';
+  const hh = Math.floor(totalMinutes / 60) % 24;
+  const mm = ((totalMinutes % 60) + 60) % 60;
   return `${hh}:${String(mm).padStart(2, '0')}`;
 }
 

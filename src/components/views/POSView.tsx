@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Product, CartItem, Profile } from '../../types';
 import { Search, ShoppingCart, Trash2, Plus, Minus, Check, Camera, Scale, Pause, X, Clock, AlertTriangle, Receipt, Printer, ArrowRight, Loader2 } from 'lucide-react';
-import { CheckCircle, WhatsappLogo, Printer as PrinterPh, Copy as CopyPh, X as XPh } from '@phosphor-icons/react';
+import { CheckCircle, WhatsappLogo, Printer as PrinterPh, Copy as CopyPh, X as XPh, FilePdf as FilePdfPh } from '@phosphor-icons/react';
 import { RoundedSelect } from '../ui/RoundedSelect';
 import { IVA_COND_LABELS, netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
 import { nextReceiptNumber } from '../../lib/receipt';
@@ -11,12 +11,17 @@ import { useScanner } from '../../features/scanner/hooks/useScanner';
 import { useBarcodeResolution } from '../../features/scanner/hooks/useBarcodeResolution';
 import { ContextualTooltip } from '../../features/onboarding';
 import { resolveScaleProduct } from '../../features/scanner/services/catalogResolver';
-import { loadBusiness } from '../../lib/businessSettings';
+import { loadBusiness, loadCopyToMe, saveCopyToMe } from '../../lib/businessSettings';
+import { isValidPhone, normalizePhone, sendTicketWhatsApp } from '../../lib/whatsapp';
+import { buildTicketText as buildSharedTicketText, type TicketData, type TicketItem } from '../../lib/ticketText';
+import { ticketPdfFile, downloadTicketPdf } from '../../lib/ticketPdf';
+import { shareFile } from '../../lib/share';
 import { ScaleModal } from '../ui/ScaleModal';
 import { enqueueSale } from '../../lib/offlineDB';
 import { matchLocalProduct } from '../../lib/productLookup';
 import * as cartSvc from '../../lib/cartService';
-import { buildSalePayload, executeSale } from '../../lib/salesService';
+import { buildSalePayload, executeSale, newOpKey } from '../../lib/salesService';
+import { canAnnulSales } from '../../lib/permissions';
 import { createMercadoPagoPreference, loadMercadoPagoSettings } from '../../lib/mercadoPagoService';
 
 const CATEGORIES_LIST = [
@@ -47,6 +52,8 @@ interface POSViewProps {
 
 export function POSView({ profile, showToast }: POSViewProps) {
   const [products, setProducts] = useState<Product[]>([]);
+  // WhatsApp del dueño del negocio: recibe copia de cada comprobante enviado.
+  const myWhatsapp = useMemo(() => normalizePhone(loadBusiness().myWhatsapp), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -276,6 +283,8 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [customerPhone, setCustomerPhone] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
   const [copiedOk, setCopiedOk] = useState(false);
+  const [copyToMe, setCopyToMe] = useState(() => loadCopyToMe());
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [cashGiven, setCashGiven] = useState('');
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
   const [discountValue, setDiscountValue] = useState<string>('0');
@@ -401,6 +410,12 @@ export function POSView({ profile, showToast }: POSViewProps) {
     })();
   }, []);
 
+  // Atajos que necesitan la versión actual de los handlers (evita closures viejas).
+  const shortcutHandlers = useRef<{ complete: () => void; park: () => void }>({
+    complete: () => {},
+    park: () => {},
+  });
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -411,6 +426,22 @@ export function POSView({ profile, showToast }: POSViewProps) {
       if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         setShowShortcuts((v) => !v);
+        return;
+      }
+      // F12 → cobrar (mismo comportamiento que el botón COBRAR).
+      if (e.key === 'F12') {
+        e.preventDefault();
+        shortcutHandlers.current.complete();
+        return;
+      }
+      // P → poner el carrito en espera (sin modificadores ni foco en un input).
+      const target = e.target as HTMLElement | null;
+      const typing =
+        !!target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey && !typing) {
+        e.preventDefault();
+        shortcutHandlers.current.park();
       }
     };
     window.addEventListener('keydown', handler);
@@ -644,18 +675,9 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const handleAnnulSale = async (s: any) => {
     if (!confirm(`¿Anular la venta de $${Number(s.total_amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.customer_name || 'Cliente General'})? Se devuelve el stock.`)) return;
     try {
-      const { error } = await supabase.from('sales').update({ status: 'cancelled' }).eq('id', s.id);
+      // Anulación transaccional (mismo mecanismo que Dashboard e Historial).
+      const { error } = await supabase.rpc('cancel_sale', { p_sale_id: s.id });
       if (error) throw error;
-      for (const it of s.sale_items || []) {
-        if (!it.product_id) continue;
-        await supabase.rpc('adjust_stock', {
-          p_product_id: it.product_id,
-          p_quantity: Number(it.quantity),
-          p_reference_type: 'return',
-          p_reference_id: String(s.id),
-          p_reason: `Anulación desde POS #${String(s.id).slice(0, 8)}`,
-        });
-      }
       notify('Venta anulada y stock restituido.', 'success');
       fetchRecentSales();
       fetchProducts();
@@ -666,6 +688,17 @@ export function POSView({ profile, showToast }: POSViewProps) {
 
   const handleCompleteSale = async () => {
     if (cart.length === 0) return;
+
+    // Última barrera de stock: nunca cobrar más de lo disponible.
+    const overStock = cart.find((item) => {
+      const available = cartSvc.stockOf(item.product);
+      return Number.isFinite(available) && item.quantity > available;
+    });
+    if (overStock) {
+      notify(`Stock insuficiente: ${overStock.product.name} (disponible ${overStock.product.stock_quantity})`, 'error');
+      return;
+    }
+
     setLoading(true);
 
     // Modo offline: encolar venta localmente
@@ -688,6 +721,9 @@ export function POSView({ profile, showToast }: POSViewProps) {
           dispatch_type: dispatchType,
           notes: saleNotes || null,
           status: 'completed',
+          // Clave de idempotencia: garantiza que un reintento del sync
+          // NO cree una venta duplicada.
+          idempotency_key: newOpKey(),
           ...paymentDetailFields(),
         };
 
@@ -698,7 +734,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
           profileId: profile?.id || null,
           paymentMethod,
           dispatchType,
-        });
+        }, profile?.id || null);
 
         // Actualizar stock local optimista (sin red: solo estado local)
         setProducts((prev) => prev.map((p) => {
@@ -861,24 +897,35 @@ export function POSView({ profile, showToast }: POSViewProps) {
     }
   };
 
-  const buildTicketText = (sale: any) => {
-    const lines: string[] = [];
-    const biz = loadBusiness();
-    lines.push(`*${biz.name} - ${sale.receiptNumber ? `N° ${sale.receiptNumber}` : `Ticket #${sale.id.slice(0, 8)}`}*`);
-    if (biz.address) lines.push(biz.address);
-    if (biz.phone) lines.push(`Tel: ${biz.phone}`);
-    if (biz.cuit) lines.push(`CUIT: ${biz.cuit}`);
-    lines.push(`Cliente: ${sale.customerName}`);
-    if (sale.saleType === 'afip') {
-      if (sale.customerDoc) lines.push(`CUIT/DNI: ${sale.customerDoc}`);
-      lines.push(`Cond. IVA: ${sale.customerIvaCond || 'CF'}`);
-    }
-    lines.push(`Fecha: ${sale.date}`);
-    lines.push(`Pago: ${paymentLabel(sale.paymentMethod)}`);
+  // Mantiene los atajos apuntando a la versión actual de los handlers.
+  shortcutHandlers.current.complete = () => {
+    if (loading) return;
+    if (successSale || scaleModalOpen || scannerOpen || recentModalOpen || parkedModalOpen) return;
+    if (cart.length === 0) return;
+    handleCompleteSale();
+  };
+  shortcutHandlers.current.park = () => {
+    if (successSale || scaleModalOpen || scannerOpen || recentModalOpen || parkedModalOpen) return;
+    handleParkSale();
+  };
+
+  /** Arma el modelo de ticket (compartido por WhatsApp, impresión y PDF). */
+  const toTicketData = (sale: any): TicketData => {
+    const items: TicketItem[] = (sale.cart || []).map((i: CartItem) => {
+      const uPrice = i.priceType === 'wholesale' ? i.product.wholesale_price : i.product.retail_price;
+      return {
+        name: i.product.name,
+        quantity: i.quantity,
+        unitPrice: uPrice,
+        subtotal: i.quantity * uPrice,
+      };
+    });
+
+    const paymentDetails: string[] = [];
     if (sale.paymentMethod === 'transfer') {
-      if (sale.transfer_bank || sale.transferBank) lines.push(`Banco origen: ${sale.transfer_bank || sale.transferBank}`);
-      if (sale.transfer_account || sale.transferAccount) lines.push(`Cuenta destino: ${sale.transfer_account || sale.transferAccount}`);
-      if (sale.transfer_ref || sale.transferRef) lines.push(`Comprobante: ${sale.transfer_ref || sale.transferRef}`);
+      if (sale.transfer_bank || sale.transferBank) paymentDetails.push(`Banco origen: ${sale.transfer_bank || sale.transferBank}`);
+      if (sale.transfer_account || sale.transferAccount) paymentDetails.push(`Cuenta destino: ${sale.transfer_account || sale.transferAccount}`);
+      if (sale.transfer_ref || sale.transferRef) paymentDetails.push(`Comprobante: ${sale.transfer_ref || sale.transferRef}`);
     }
     if (sale.paymentMethod === 'card') {
       const det = [
@@ -886,57 +933,108 @@ export function POSView({ profile, showToast }: POSViewProps) {
         sale.card_brand || sale.cardBrand,
         (sale.card_last4 || sale.cardLast4) ? `****${sale.card_last4 || sale.cardLast4}` : null,
       ].filter(Boolean).join(' · ');
-      if (det) lines.push(`Tarjeta: ${det}`);
-      if (sale.card_auth || sale.cardAuth) lines.push(`Autorización: ${sale.card_auth || sale.cardAuth}`);
-      if ((sale.card_type === 'credit') && (sale.card_installments || sale.cardInstallments)) lines.push(`Cuotas: ${sale.card_installments || sale.cardInstallments}`);
+      if (det) paymentDetails.push(`Tarjeta: ${det}`);
+      if (sale.card_auth || sale.cardAuth) paymentDetails.push(`Autorización: ${sale.card_auth || sale.cardAuth}`);
+      if ((sale.card_type === 'credit') && (sale.card_installments || sale.cardInstallments)) paymentDetails.push(`Cuotas: ${sale.card_installments || sale.cardInstallments}`);
     }
 
-    if (sale.notes) lines.push(`Notas: ${sale.notes}`);
-    lines.push(``);
-    sale.cart.forEach((i: CartItem) => {
-      const uPrice = i.priceType === 'wholesale' ? i.product.wholesale_price : i.product.retail_price;
-      lines.push(`- ${i.product.name} x${i.quantity} - $${(i.quantity * uPrice).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    });
-    lines.push(``);
-    lines.push(`Subtotal: $${(sale.rawSubtotal || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    if ((sale.discountVal || 0) > 0) {
-      const label = sale.discountType === 'fixed' ? `$${sale.discountValue}` : `${sale.discountValue}%`;
-      lines.push(`Descuento (${label}): -$${sale.discountVal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    if (sale.dispatchType === 'delivery') {
-      if ((sale.deliveryFee || 0) > 0) lines.push(`Envio: +$${sale.deliveryFee.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-      else lines.push(`Envio: BONIFICADO`);
-    }
-    lines.push(``);
-    if (sale.saleType === 'afip') {
-      lines.push(`Neto: $${(sale.netAmount ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-      lines.push(`IVA 21%: $${(sale.ivaAmount ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    lines.push(`*TOTAL: $${sale.totalAmount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`);
-    lines.push(``);
-    lines.push(`¡Gracias por elegir saludable! 🌱`);
-    if (biz.footer) lines.push(biz.footer);
-    return lines.join('\n');
+    return {
+      saleId: sale.id,
+      receiptNumber: sale.receiptNumber || null,
+      dateLabel: sale.date || new Date().toLocaleString('es-AR'),
+      customerName: sale.customerName || 'Cliente General',
+      customerDoc: sale.customerDoc || null,
+      customerIvaCond: sale.customerIvaCond || null,
+      saleType: sale.saleType || 'internal',
+      paymentMethod: sale.paymentMethod || 'cash',
+      dispatchType: sale.dispatchType || 'pickup',
+      paymentDetails,
+      notes: sale.notes || null,
+      items,
+      subtotal: sale.rawSubtotal,
+      discountLabel: (sale.discountVal || 0) > 0
+        ? (sale.discountType === 'fixed' ? `$${sale.discountValue}` : `${sale.discountValue}%`)
+        : null,
+      discountAmount: sale.discountVal || 0,
+      deliveryFee: sale.deliveryFee || 0,
+      deliveryFeeFree: sale.deliveryFeeType === 'free' || !(sale.deliveryFee || 0),
+      netAmount: sale.netAmount,
+      ivaAmount: sale.ivaAmount,
+      totalAmount: sale.totalAmount,
+      sellerName: 'Caja',
+    };
   };
+
+  const buildTicketText = (sale: any) => buildSharedTicketText(toTicketData(sale));
 
   const handleWhatsAppSend = (phoneOverride?: string) => {
     if (!successSale) return;
     const rawPhone = phoneOverride ?? customerPhone ?? successSale.customerPhone ?? '';
-    const cleanPhone = (rawPhone || '').replace(/\D/g, '');
+    const cleanPhone = normalizePhone(rawPhone);
 
     if (!cleanPhone) {
       setWhatsappError('Ingresá el número de WhatsApp del cliente primero.');
       return;
     }
-    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+    if (!isValidPhone(cleanPhone)) {
       setWhatsappError(`El número "${cleanPhone}" parece incompleto. En Argentina usá 549 + área + número (Ej: 5491123456789), sin 0, sin 15, sin +.`);
       return;
     }
+
+    const biz = loadBusiness();
+    const myPhone = normalizePhone(biz.myWhatsapp);
+    const copyPhone = copyToMe && isValidPhone(myPhone) ? myPhone : '';
+
     setWhatsappError('');
     const plainText = buildTicketText(successSale);
-    const encoded = encodeURIComponent(plainText);
-    const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const result = sendTicketWhatsApp({
+      toPhone: cleanPhone,
+      text: plainText,
+      copyPhone,
+    });
+
+    if (!result.customerOpened) {
+      setWhatsappError('No se pudo abrir WhatsApp. Permití las ventanas emergentes o usá "Copiar texto".');
+      return;
+    }
+    if (copyPhone && !result.copyOpened) {
+      setWhatsappError('Se abrió el chat del cliente, pero la copia a tu WhatsApp fue bloqueada. Permití las ventanas emergentes.');
+    }
+  };
+
+  /**
+   * Ticket en PDF. En el móvil abre la hoja de compartir del sistema (ahí se
+   * elige WhatsApp y el PDF viaja como documento). En escritorio, que no
+   * soporta compartir archivos, lo descarga.
+   */
+  const handleSendPdf = async () => {
+    if (!successSale) return;
+    setPdfBusy(true);
+    setWhatsappError('');
+    try {
+      const data = toTicketData(successSale);
+      const file = ticketPdfFile(data);
+      const outcome = await shareFile(file, {
+        title: `Ticket ${data.receiptNumber || data.saleId.slice(0, 8).toUpperCase()}`,
+        text: `Comprobante ${data.receiptNumber || ''} - ${data.customerName}`,
+      });
+
+      if (outcome === 'downloaded') {
+        notify('PDF descargado. Abrí WhatsApp y adjuntá el archivo.', 'warning');
+        // Además abre el chat para que sólo falte adjuntar.
+        const cleanPhone = normalizePhone(customerPhone || successSale.customerPhone || '');
+        if (isValidPhone(cleanPhone)) {
+          sendTicketWhatsApp({ toPhone: cleanPhone, text: buildTicketText(successSale) });
+        }
+      } else if (outcome === 'unsupported') {
+        downloadTicketPdf(data);
+        notify('PDF descargado.', 'success');
+      }
+    } catch (e: any) {
+      notify(`No se pudo generar el PDF: ${e?.message || e}`, 'error');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const handleCopyTicket = async () => {
@@ -953,10 +1051,6 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const paymentLabel = (m: string) =>
     m === 'cash' ? 'Efectivo' : m === 'transfer' ? 'Transferencia' : m === 'card' ? 'Tarjeta' : m === 'mercadopago' ? 'Mercado Pago' : m?.toUpperCase();
   const dispatchLabel = (d: string) => (d === 'delivery' ? 'Envío' : 'Retira');
-  const isPhoneValid = (p: string) => {
-    const c = (p || '').replace(/\D/g, '');
-    return c.length >= 10 && c.length <= 15;
-  };
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || (p.barcode && p.barcode.includes(searchTerm));
@@ -1544,7 +1638,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                           {/* Quantity controls */}
                           <div className="flex items-center bg-slate-100 rounded-xl p-0.5 gap-0.5">
                             <button
-                              onClick={() => updateQuantity(item.product.id, isKg ? -10 : -10)}
+                              onClick={() => updateQuantity(item.product.id, -10)}
                               className="px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-white rounded-md transition cursor-pointer"
                             >
                               −10
@@ -1558,17 +1652,23 @@ export function POSView({ profile, showToast }: POSViewProps) {
                             <input
                               type="number"
                               value={item.quantity}
+                              max={atMaxStock ? item.quantity : undefined}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value);
                                 if (isNaN(val) || val <= 0) {
                                   removeItem(item.product.id);
-                                } else {
-                                  setCart((prev) =>
-                                    prev.map((ci) =>
-                                      ci.product.id === item.product.id ? { ...ci, quantity: Math.round(val * 100) / 100 } : ci
-                                    )
-                                  );
+                                  return;
                                 }
+                                // No permitir superar el stock disponible: el cobro tampoco lo aceptaría.
+                                const available = cartSvc.stockOf(item.product);
+                                if (Number.isFinite(available) && val > available) {
+                                  const clamped = cartSvc.setQuantity(cart, item.product.id, available);
+                                  if (clamped) setCart(clamped);
+                                  notify(`Stock insuficiente: ${item.product.name} (disponible ${available})`, 'warning');
+                                  return;
+                                }
+                                const next = cartSvc.setQuantity(cart, item.product.id, val);
+                                if (next) setCart(next);
                               }}
                               className="w-14 px-1 py-0.5 border border-slate-300 rounded-lg text-center text-xs font-extrabold text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                               min="0.01"
@@ -1582,7 +1682,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                               <Plus size={12} />
                             </button>
                             <button
-                              onClick={() => updateQuantity(item.product.id, isKg ? 10 : 10)}
+                              onClick={() => updateQuantity(item.product.id, 10)}
                               className="px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-white rounded-md transition cursor-pointer"
                             >
                               +10
@@ -1835,7 +1935,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                       >
                         <Printer size={15} />
                       </button>
-                      {s.status !== 'cancelled' && (['admin', 'supervisor', 'vendedor'].includes(profile?.role || '')) && (
+                      {s.status !== 'cancelled' && canAnnulSales(profile?.role) && (
                         <button
                           onClick={() => handleAnnulSale(s)}
                           title="Anular venta"
@@ -1959,7 +2059,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                     value={customerPhone}
                     onChange={(e) => { setCustomerPhone(e.target.value); setWhatsappError(''); setCopiedOk(false); }}
                     placeholder="5491123456789"
-                    className={`flex-1 px-3 py-2.5 border-2 rounded-xl text-[14px] font-semibold bg-white text-slate-900 focus:outline-none transition tnum ${customerPhone === '' ? 'border-slate-300 focus:border-emerald-500' : isPhoneValid(customerPhone) ? 'border-emerald-500 focus:border-emerald-600' : 'border-red-300 focus:border-red-500'}`}
+                    className={`flex-1 px-3 py-2.5 border-2 rounded-xl text-[14px] font-semibold bg-white text-slate-900 focus:outline-none transition tnum ${customerPhone === '' ? 'border-slate-300 focus:border-emerald-500' : isValidPhone(customerPhone) ? 'border-emerald-500 focus:border-emerald-600' : 'border-red-300 focus:border-red-500'}`}
                   />
                   <button
                     onClick={() => handleWhatsAppSend()}
@@ -1968,6 +2068,34 @@ export function POSView({ profile, showToast }: POSViewProps) {
                     <WhatsappLogo size={17} weight="bold" /> Enviar
                   </button>
                 </div>
+
+                {/* Enviar el ticket en PDF (documento) por WhatsApp */}
+                <button
+                  onClick={handleSendPdf}
+                  disabled={pdfBusy}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-[13px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                >
+                  {pdfBusy ? <Loader2 size={15} className="animate-spin" /> : <FilePdfPh size={15} weight="bold" />}
+                  {pdfBusy ? 'Generando PDF…' : 'Enviar ticket en PDF'}
+                </button>
+
+                {/* Copia para el dueño del negocio */}
+                <label className={`flex items-start gap-2 ${myWhatsapp ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
+                  <input
+                    type="checkbox"
+                    checked={copyToMe && !!myWhatsapp}
+                    disabled={!myWhatsapp}
+                    onChange={(e) => { setCopyToMe(e.target.checked); saveCopyToMe(e.target.checked); }}
+                    className="mt-0.5 w-4 h-4 accent-emerald-600 shrink-0"
+                  />
+                  <span className="text-[12px] font-semibold text-slate-700 leading-snug">
+                    Recibir una copia en mi WhatsApp
+                    {myWhatsapp
+                      ? <span className="font-mono text-slate-500"> ({myWhatsapp})</span>
+                      : <span className="text-amber-600"> — configurá tu número en Configuración</span>}
+                  </span>
+                </label>
+
                 {whatsappError
                   ? <p className="text-[12px] font-semibold text-red-600">{whatsappError}</p>
                   : <p className="text-[12px] text-slate-500 font-medium">Formato: 549 + área + número, sin 0, sin 15, sin +. Se abre WhatsApp y vos confirmás.</p>}
@@ -1977,6 +2105,9 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 >
                   <CopyPh size={15} weight="bold" /> {copiedOk ? '¡Copiado! Pegalo en WhatsApp' : 'Copiar texto para pegar manual'}
                 </button>
+                <p className="text-[11px] font-semibold text-slate-400 text-center">
+                  Podés mandarlo por WhatsApp, imprimirlo, o hacer las dos cosas.
+                </p>
               </div>
             </div>
 
@@ -2019,6 +2150,10 @@ export function POSView({ profile, showToast }: POSViewProps) {
               <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-[#232323]">
                 <span className="text-slate-600 dark:text-slate-300">Poner en espera carrito</span>
                 <kbd className="px-2 py-0.5 bg-white dark:bg-[#2A2A2A] rounded border text-xs font-bold">P</kbd>
+              </div>
+              <div className="flex justify-between items-center p-2 rounded-xl bg-slate-50 dark:bg-[#232323]">
+                <span className="text-slate-600 dark:text-slate-300">Cobrar la venta</span>
+                <kbd className="px-2 py-0.5 bg-white dark:bg-[#2A2A2A] rounded border text-xs font-bold">F12</kbd>
               </div>
             </div>
             <button onClick={() => setShowShortcuts(false)} className="w-full mt-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold cursor-pointer">Cerrar</button>

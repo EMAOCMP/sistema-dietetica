@@ -8,7 +8,9 @@ import { getIvaRate } from '../../lib/tax';
 import { loadMetaSchedule, saveMetaSchedule, isValidTime, hoursOf } from '../../lib/metaSchedule';
 import { SelectMenu } from '../ui/SelectMenu';
 import { Shield, Save, Loader2, Plus, Trash2, MapPin, Store, Percent, ReceiptText, Download, Clock, Sparkles } from 'lucide-react';
+import { WhatsappLogo } from '@phosphor-icons/react';
 import { useOnboarding } from '../../features/onboarding';
+import { canManageSettings, isAdmin } from '../../lib/permissions';
 
 interface LocationRow {
   id: string;
@@ -72,7 +74,12 @@ export function SettingsView({ currentUser, showToast }: {
 
   const handleSaveBiz = () => {
     saveBusiness(biz);
-    notify('Datos del negocio guardados. Se usan en los tickets.', 'success');
+    notify(
+      biz.myWhatsapp
+        ? 'Datos del negocio guardados. Vas a recibir una copia de cada comprobante enviado por WhatsApp.'
+        : 'Datos del negocio guardados. Se usan en los tickets.',
+      'success'
+    );
   };
 
   const handleSaveFiscal = () => {
@@ -192,12 +199,14 @@ export function SettingsView({ currentUser, showToast }: {
     }
   };
 
-  if (!['admin', 'supervisor', 'vendedor'].includes(currentUser?.role || '')) {
+  const canEditLocations = isAdmin(currentUser?.role);
+
+  if (!canManageSettings(currentUser?.role)) {
     return (
       <div className="p-8 text-center text-slate-500">
         <Shield size={48} className="mx-auto text-amber-500 mb-2" />
         <p className="text-lg font-semibold">Acceso Restringido</p>
-        <p className="text-sm">Solo los administradores pueden cambiar la configuración.</p>
+        <p className="text-sm">Solo administradores y supervisores pueden cambiar la configuración.</p>
       </div>
     );
   }
@@ -242,6 +251,16 @@ export function SettingsView({ currentUser, showToast }: {
           <label className="text-[11px] font-bold text-slate-500">Teléfono
             <input value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })}
               className="mt-0.5 w-full px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-semibold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </label>
+          <label className="text-[11px] font-bold text-slate-500 sm:col-span-2">
+            <span className="flex items-center gap-1"><WhatsappLogo size={12} weight="fill" className="text-emerald-600" /> Mi WhatsApp (recibo la copia de los comprobantes)</span>
+            <input value={biz.myWhatsapp} onChange={(e) => setBiz({ ...biz, myWhatsapp: e.target.value })}
+              inputMode="numeric" placeholder="5491123456789"
+              className="mt-0.5 w-full px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-mono font-semibold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <span className="mt-1 block text-[10px] font-semibold text-slate-400">
+              Cuando mandás un ticket por WhatsApp, también se abre una copia en este número para que tengas el registro.
+              Formato: 549 + área + número, sin 0, sin 15, sin +.
+            </span>
           </label>
           <label className="text-[11px] font-bold text-slate-500 sm:col-span-2">Pie del ticket
             <input value={biz.footer} onChange={(e) => setBiz({ ...biz, footer: e.target.value })}
@@ -400,6 +419,12 @@ export function SettingsView({ currentUser, showToast }: {
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
           <MapPin size={14} /> Ubicaciones de stock
         </p>
+        {!canEditLocations ? (
+          <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400">
+            Solo los administradores pueden crear o modificar ubicaciones de stock.
+          </p>
+        ) : (
+          <>
         <div className="flex gap-2">
           <input value={newLocName} onChange={(e) => setNewLocName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAddLocation(); }}
@@ -447,6 +472,8 @@ export function SettingsView({ currentUser, showToast }: {
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

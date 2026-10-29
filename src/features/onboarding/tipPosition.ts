@@ -11,6 +11,13 @@ export interface TipRect { top: number; left: number; width: number; height: num
 
 export type TipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
+export interface TipBox {
+  left: number;
+  top: number;
+  /** Lado elegido: dónde quedó la tarjeta respecto del objetivo. */
+  side: TipPlacement;
+}
+
 const GAP = 16;
 const MARGIN = 12;
 /** Bajo el header fijo de la app (h-16) para no taparlo. */
@@ -24,7 +31,7 @@ export function computeTipBox(
   tipH: number,
   viewportW: number,
   viewportH: number,
-): { left: number; top: number } {
+): TipBox {
   const order: TipPlacement[] =
     placement === 'top' ? ['top', 'bottom', 'right', 'left']
     : placement === 'bottom' ? ['bottom', 'top', 'right', 'left']
@@ -59,7 +66,7 @@ export function computeTipBox(
     const overlapW = Math.max(0, Math.min(clampedLeft + tipW, targetRight) - Math.max(clampedLeft, target.left));
     const overlapH = Math.max(0, Math.min(clampedTop + tipH, targetBottom) - Math.max(clampedTop, target.top));
 
-    return { left: clampedLeft, top: clampedTop, fits, overlapArea: overlapW * overlapH };
+    return { left: clampedLeft, top: clampedTop, fits, side, overlapArea: overlapW * overlapH };
   });
 
   // 1) entra en pantalla y no tapa el objetivo  2) no lo tapa  3) tapa lo menos
@@ -68,5 +75,5 @@ export function computeTipBox(
     ?? candidates.find((c) => c.overlapArea === 0)
     ?? candidates.reduce((acc, c) => (c.overlapArea < acc.overlapArea ? c : acc));
 
-  return { left: best.left, top: best.top };
+  return { left: best.left, top: best.top, side: best.side };
 }

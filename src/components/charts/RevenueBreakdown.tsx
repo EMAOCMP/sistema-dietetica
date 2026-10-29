@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { FileText, Trash2, X } from 'lucide-react';
 import type { SaleWithItems } from '../views/DashboardView';
+import { normalizePaymentMethod } from '../../lib/paymentMethods';
 
 interface RevenueBreakdownProps {
   revenue: number;
   cashTotal: number;
   transferTotal: number;
   cardTotal: number;
+  mpTotal?: number;
   pickupCount: number;
   deliveryCount: number;
   sales: SaleWithItems[];
@@ -24,6 +26,7 @@ export function RevenueBreakdown({
   cashTotal,
   transferTotal,
   cardTotal,
+  mpTotal = 0,
   pickupCount,
   deliveryCount,
   sales,
@@ -36,12 +39,15 @@ export function RevenueBreakdown({
     { code: 'cash', label: 'Efectivo', value: cashTotal, color: '#10b981', bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20', text: 'text-emerald-700 dark:text-emerald-300' },
     { code: 'transfer', label: 'Transferencia', value: transferTotal, color: '#3B82F6', bg: 'bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20', text: 'text-blue-800 dark:text-blue-300' },
     { code: 'card', label: 'Tarjeta', value: cardTotal, color: '#f59e0b', bg: 'bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20', text: 'text-amber-800 dark:text-amber-300' },
+    ...(mpTotal > 0
+      ? [{ code: 'mercadopago', label: 'Mercado Pago', value: mpTotal, color: '#a855f7', bg: 'bg-purple-50 border-purple-200 dark:bg-purple-500/10 dark:border-purple-500/20', text: 'text-purple-800 dark:text-purple-300' }]
+      : []),
   ];
   const dispatches = [
     { code: 'pickup', label: 'Retiran en Local', count: pickupCount },
     { code: 'delivery', label: 'Envíos a Domicilio', count: deliveryCount },
   ];
-  const totalPay = cashTotal + transferTotal + cardTotal || 1;
+  const totalPay = cashTotal + transferTotal + cardTotal + mpTotal || 1;
   const totalDispatch = pickupCount + deliveryCount || 1;
 
   const toggleFilter = (f: Filter) => {
@@ -51,7 +57,7 @@ export function RevenueBreakdown({
   const filtered = filter
     ? sales.filter((s) =>
         filter.kind === 'payment'
-          ? (s.payment_method || 'cash') === filter.value
+          ? normalizePaymentMethod(s.payment_method) === filter.value
           : (s.dispatch_type || 'pickup') === filter.value
       )
     : [];
@@ -72,7 +78,7 @@ export function RevenueBreakdown({
       </div>
 
       {/* Por medio de pago (click para filtrar) */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${methods.length >= 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
         {methods.map((m) => {
           const pct = (m.value / totalPay) * 100;
           const active = isActive('payment', m.code);

@@ -25,6 +25,7 @@ describe('computeTipBox', () => {
     const box = computeTipBox(target, 'bottom', TIP_W, TIP_H, VIEW_W, VIEW_H);
 
     expect(box.top).toBeGreaterThanOrEqual(target.top + target.height);
+    expect(box.side).toBe('bottom');
     expect(overlaps(box, target)).toBe(false);
   });
 
@@ -33,6 +34,7 @@ describe('computeTipBox', () => {
     const box = computeTipBox(target, 'right', TIP_W, TIP_H, VIEW_W, VIEW_H);
 
     expect(box.left).toBeGreaterThanOrEqual(target.left + target.width);
+    expect(box.side).toBe('right');
     expect(overlaps(box, target)).toBe(false);
   });
 

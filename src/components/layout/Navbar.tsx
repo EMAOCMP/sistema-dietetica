@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { canCloseCash, canManageSettings, canViewReports, canViewUsers } from '../../lib/permissions';
 import {
   SquaresFour,
   Package,
@@ -46,7 +47,6 @@ export function Navbar({
   };
 
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     const fetchBadges = async () => {
@@ -60,10 +60,6 @@ export function Navbar({
         ).length;
         setLowStockCount(critical);
       } catch { /* offline: sin badge */ }
-      try {
-        const { getPendingCount } = await import('../../lib/offlineDB');
-        setPendingCount(await getPendingCount());
-      } catch { /* IndexedDB no disponible */ }
     };
     fetchBadges();
     const id = setInterval(fetchBadges, 60000);
@@ -75,15 +71,17 @@ export function Navbar({
   }, []);
 
   const navItems = [
-    { id: 'dashboard', label: 'Panel Principal', icon: SquaresFour, badge: pendingCount > 0 ? pendingCount : undefined, badgeColor: 'sky' as const },
+    // El contador de la cola offline NO va en "Panel Principal": el badge de
+    // sincronización lo muestra el OfflineIndicator (abajo a la derecha).
+    { id: 'dashboard', label: 'Panel Principal', icon: SquaresFour },
     { id: 'pos', label: 'Venta Rápida (POS)', icon: ShoppingCart },
     { id: 'products', label: 'Productos / Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, badgeColor: 'red' as const },
     { id: 'intake', label: 'Ingreso Mercadería', icon: Truck },
     { id: 'history', label: 'Pedidos & Historial', icon: ClockCounterClockwise },
     { id: 'activity', label: 'Mi actividad', icon: ChartLine },
-    ...(['admin', 'supervisor', 'vendedor'].includes(profile?.role || '') ? [{ id: 'cashclose', label: 'Cierre de Caja', icon: Calculator }] : []),
-    ...(['admin', 'supervisor', 'vendedor'].includes(profile?.role || '') ? [{ id: 'reports', label: 'Reportes de Ganancias', icon: ChartBar }] : []),
-    ...(['admin', 'supervisor', 'vendedor'].includes(profile?.role || '') ? [{ id: 'users', label: 'Usuarios y Actividad', icon: Users }] : []),
+    ...(canCloseCash(profile?.role) ? [{ id: 'cashclose', label: 'Cierre de Caja', icon: Calculator }] : []),
+    ...(canViewReports(profile?.role) ? [{ id: 'reports', label: 'Reportes de Ganancias', icon: ChartBar }] : []),
+    ...(canViewUsers(profile?.role) ? [{ id: 'users', label: 'Usuarios y Actividad', icon: Users }] : []),
   ];
 
   const badgeStyles: Record<string, string> = {
@@ -191,8 +189,8 @@ export function Navbar({
           </ul>
           </nav>
 
-        {/* Configuración (solo admin) */}
-        {['admin', 'supervisor', 'vendedor'].includes(profile?.role || '') && !collapsed && (
+        {/* Configuración (admin + supervisor) */}
+        {canManageSettings(profile?.role) && !collapsed && (
           <ul className="space-y-1 px-3 mt-1 pb-2">
             <li>
               <button

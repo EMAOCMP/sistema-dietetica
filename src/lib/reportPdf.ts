@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { paymentLabel } from './paymentMethods';
+import { fmtMoney } from './format';
 
 export interface ReportSale {
   created_at: string;
@@ -38,17 +40,16 @@ export interface DashboardReport {
   cashTotal: number;
   transferTotal: number;
   cardTotal: number;
+  mpTotal?: number;
   bestSellers: ReportProduct[];
   categoryProfits: ReportCategory[];
   sales: ReportSale[];
   lowStock: ReportStockItem[];
 }
 
-const fmt$ = (n: number) =>
-  '$' + Math.round(n).toLocaleString('es-AR');
+const fmt$ = (n: number) => fmtMoney(n);
 
-const pagoLabel = (m?: string) =>
-  m === 'transfer' ? 'Transferencia' : m === 'card' ? 'Tarjeta' : 'Efectivo';
+const pagoLabel = (m?: string) => paymentLabel(m);
 
 export function downloadDashboardPdf(r: DashboardReport) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -85,7 +86,8 @@ export function downloadDashboardPdf(r: DashboardReport) {
   y = (doc as any).lastAutoTable.finalY + 8;
 
   // Pagos
-  const payTotal = r.cashTotal + r.transferTotal + r.cardTotal || 1;
+  const mpTotal = r.mpTotal || 0;
+  const payTotal = r.cashTotal + r.transferTotal + r.cardTotal + mpTotal || 1;
   autoTable(doc, {
     startY: y,
     head: [['Medio de pago', 'Monto', '%']],
@@ -93,6 +95,9 @@ export function downloadDashboardPdf(r: DashboardReport) {
       ['Efectivo', fmt$(r.cashTotal), `${((r.cashTotal / payTotal) * 100).toFixed(0)}%`],
       ['Transferencia', fmt$(r.transferTotal), `${((r.transferTotal / payTotal) * 100).toFixed(0)}%`],
       ['Tarjeta', fmt$(r.cardTotal), `${((r.cardTotal / payTotal) * 100).toFixed(0)}%`],
+      ...(mpTotal > 0
+        ? [['Mercado Pago', fmt$(mpTotal), `${((mpTotal / payTotal) * 100).toFixed(0)}%`]]
+        : []),
     ],
     margin: { left: 14, right: 14, bottom: 20 },
     theme: 'striped',

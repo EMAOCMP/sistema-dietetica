@@ -10,6 +10,7 @@ import { ContextualTooltip, EmptyState } from '../../features/onboarding';
 import { downloadCsv, stampName } from '../../lib/exportCsv';
 import { RoundedSelect } from '../ui/RoundedSelect';
 import { ActionDropdown } from '../ui/ActionDropdown';
+import { canDeactivateProducts } from '../../lib/permissions';
 
 const daysToExpiry = (p: Product): number | null => {
   if (!p.expiry_date) return null;
@@ -71,7 +72,7 @@ const CATEGORIES_LIST = [
 export function ProductsView({ showToast, profile }: { showToast?: (msg: string, kind?: 'info' | 'success' | 'warning' | 'error') => void; profile?: Profile | null }) {
   // Vendedor edita todo menos baja/reactivar (lo bloquea RLS + se oculta acá).
   // Solo admin borra y gestiona ubicaciones/usuarios.
-  const canManage = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
+  const canManage = canDeactivateProducts(profile?.role);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -467,7 +468,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   const handleReactivate = async (product: Product) => {
     if (!navigator.onLine) {
       const { enqueueProductUpdate } = await import('../../lib/offlineDB');
-      await enqueueProductUpdate({ id: product.id, is_active: true });
+      await enqueueProductUpdate({ id: product.id, is_active: true }, profile?.id || null);
       setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, is_active: true } : p)));
       notify('Sin conexión: reactivación encolada, se sincronizará sola.', 'success');
       return;
@@ -631,10 +632,10 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       if (!navigator.onLine) {
         const { enqueueProductCreate, enqueueProductUpdate } = await import('../../lib/offlineDB');
         if (editingProduct) {
-          await enqueueProductUpdate({ id: editingProduct.id, ...productData });
+          await enqueueProductUpdate({ id: editingProduct.id, ...productData }, profile?.id || null);
           setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? { ...p, ...productData } : p)));
         } else {
-          await enqueueProductCreate(productData);
+          await enqueueProductCreate(productData, profile?.id || null);
         }
         setModalOpen(false);
         notify('Sin conexión: producto encolado, se sincronizará solo.', 'success');
@@ -686,7 +687,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
 
     if (!navigator.onLine) {
       const { enqueueProductUpdate } = await import('../../lib/offlineDB');
-      await enqueueProductUpdate({ id: product.id, is_active: false });
+      await enqueueProductUpdate({ id: product.id, is_active: false }, profile?.id || null);
       setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, is_active: false } : p)));
       notify('Sin conexión: baja encolada, se sincronizará sola.', 'success');
       return;
@@ -904,8 +905,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           product_id: adjustProduct.id,
           quantity_change: signed,
           reason: `${adjustMode === 'in' ? 'Entrada' : 'Salida'}: ${reasonLabel}`,
-          user_id: null,
-        });
+        }, profile?.id || null);
         setProducts((prev) => prev.map((p) => (p.id === adjustProduct.id ? { ...p, stock_quantity: newStock } : p)));
         setAdjustProduct(null);
         setAdjustQty('');
@@ -1567,7 +1567,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-1.5 ml-1">
             <span className="text-xs font-bold text-slate-500">{selectedIds.size} sel.</span>
-            <button onClick={async () => { if(!(await askConfirm(`¿Dar de baja ${selectedIds.size} productos?`))) return; const ids = Array.from(selectedIds); if (!navigator.onLine) { const { enqueueProductUpdate } = await import('../../lib/offlineDB'); for (const id of ids) await enqueueProductUpdate({ id, is_active: false }); setProducts((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, is_active: false } : p))); notify('Sin conexión: bajas encoladas.'); } else { ids.forEach(id=> supabase.from('products').update({is_active:false}).eq('id',id).then(()=> fetchProducts())); } setSelectedIds(new Set()); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold cursor-pointer">Dar de baja</button>
+            <button onClick={async () => { if(!(await askConfirm(`¿Dar de baja ${selectedIds.size} productos?`))) return; const ids = Array.from(selectedIds); if (!navigator.onLine) { const { enqueueProductUpdate } = await import('../../lib/offlineDB'); for (const id of ids) await enqueueProductUpdate({ id, is_active: false }, profile?.id || null); setProducts((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, is_active: false } : p))); notify('Sin conexión: bajas encoladas.'); } else { ids.forEach(id=> supabase.from('products').update({is_active:false}).eq('id',id).then(()=> fetchProducts())); } setSelectedIds(new Set()); }} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold cursor-pointer">Dar de baja</button>
             <button onClick={() => { const list = filteredProducts.filter(p=> selectedIds.has(p.id)); const csvRows = list.map(p=> [p.name, p.barcode||'', p.category||'', p.stock_quantity, p.wholesale_price, p.retail_price]); downloadCsv(stampName('seleccion'), ['Nombre','Código','Categoría','Stock','Mayorista','Minorista'], csvRows); }} className="px-3 py-1.5 bg-white dark:bg-[#1F1F1F] border border-slate-200 dark:border-[#333333] text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold cursor-pointer">Exportar</button>
             <button onClick={()=> setSelectedIds(new Set())} className="px-2 py-1 text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer">✕</button>
           </div>

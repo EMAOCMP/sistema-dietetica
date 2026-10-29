@@ -15,6 +15,12 @@ import {
   CaretRight,
 } from '@phosphor-icons/react';
 import type { Profile } from '../../types';
+import {
+  canCloseCash,
+  canManageSettings,
+  canViewReports,
+  canViewUsers,
+} from '../../lib/permissions';
 
 interface MobileTabBarProps {
   profile: Profile | null;
@@ -48,14 +54,14 @@ export function MobileTabBar({ profile, activeTab, setActiveTab }: MobileTabBarP
     { id: 'intake', label: 'Ingreso Mercadería', icon: Truck },
     { id: 'history', label: 'Pedidos & Historial', icon: ClockCounterClockwise },
     { id: 'activity', label: 'Mi actividad', icon: ChartLine },
-    ...((['admin', 'supervisor', 'vendedor'].includes(profile?.role || ''))
+    ...((canCloseCash(profile?.role) && canViewReports(profile?.role) && canViewUsers(profile?.role))
       ? [
           { id: 'cashclose', label: 'Cierre de Caja', icon: Calculator },
           { id: 'reports', label: 'Reportes de Ganancias', icon: ChartBar },
           { id: 'users', label: 'Usuarios y Actividad', icon: Users },
         ]
       : []),
-    ...(['admin', 'supervisor', 'vendedor'].includes(profile?.role || '')
+    ...(canManageSettings(profile?.role)
       ? [{ id: 'settings', label: 'Configuración', icon: Gear }]
       : []),
   ];

@@ -16,10 +16,20 @@
 -- Asegurar columna de descuento (por si no corrió reportes_mejoras.sql)
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 
+-- Asegurar columnas de conciliación MP (idempotentes; de mercado_pago_webhook.sql)
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_auth TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_link TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_preference_id TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_status TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_external_ref TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_payment_id TEXT;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS mp_status_detail TEXT;
+CREATE INDEX IF NOT EXISTS idx_sales_mp_external_ref ON sales(mp_external_ref);
+
 -- ============================================
 -- 1. create_mp_pending_sale — crea venta pendiente (sin stock)
 -- ============================================
-DROP FUNCTION IF EXISTS create_mp_pending_sale(TEXT, NUMERIC, JSONB, JSONB, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS create_mp_pending_sale(TEXT, NUMERIC, JSONB, JSONB, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT);
 
 CREATE FUNCTION create_mp_pending_sale(
   p_customer_name TEXT,
@@ -74,21 +84,27 @@ BEGIN
     mp_status, mp_link, mp_preference_id, mp_external_ref
   ) VALUES (
     auth.uid(), p_customer_name, p_customer_doc, p_customer_iva_cond,
-    p_sale_type, p_total_amount, p_net_amount, p_iva_amount, p_profit_amount, COALESCE(p_discount_amount, 0),
+    p_sale_type, p_total_amount, COALESCE(p_net_amount, p_total_amount), COALESCE(p_iva_amount, 0), COALESCE(p_profit_amount, 0), COALESCE(p_discount_amount, 0),
     'mercadopago', p_dispatch_type, p_notes, 'pending_payment', p_idempotency_key,
     'pending', p_mp_link, p_mp_preference_id, p_mp_external_ref
   ) RETURNING id INTO v_sale_id;
 
   -- Ítems (sin tocar stock todavía)
   FOR it IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    IF (it->>'product_id') IS NULL THEN
+      RAISE EXCEPTION 'Ítem sin product_id';
+    END IF;
+    IF (it->>'quantity') IS NULL OR (it->>'quantity')::numeric <= 0 THEN
+      RAISE EXCEPTION 'Cantidad inválida en ítem';
+    END IF;
     INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, cost_price_at_sale)
     VALUES (
       v_sale_id,
       (it->>'product_id')::uuid,
       (it->>'quantity')::numeric,
-      (it->>'unit_price')::numeric,
-      (it->>'quantity')::numeric * (it->>'unit_price')::numeric,
-      NULLIF(it->>'cost_price','')::numeric
+      COALESCE((it->>'unit_price')::numeric, 0),
+      (it->>'quantity')::numeric * COALESCE((it->>'unit_price')::numeric, 0),
+      COALESCE(NULLIF(it->>'cost_price','')::numeric, 0)
     );
   END LOOP;
 
@@ -213,9 +229,22 @@ BEGIN
 END;
 $$;
 
--- Verificación
+-- Verificación (esperá: columna=7/7 ✅ y las 3 funciones ✅)
+SELECT 'columnas mp_* (espera 7)' AS chequeo,
+       COUNT(*)::text || '/7' AS resultado
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'sales'
+  AND column_name IN ('mp_auth','mp_link','mp_preference_id','mp_status','mp_external_ref','mp_payment_id','mp_status_detail')
+UNION ALL
+SELECT 'RPCs MP (espera 3)', COUNT(*)::text || '/3'
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN ('create_mp_pending_sale','finalize_mp_sale','cancel_mp_sale')
+UNION ALL
+SELECT 'sales.discount_amount', CASE WHEN COUNT(*) = 1 THEN 'OK' ELSE 'FALTA' END
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'sales' AND column_name = 'discount_amount';
+
 SELECT p.proname AS funcion
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public'
-  AND p.proname IN ('create_mp_pending_sale','finalize_mp_sale','cancel_mp_sale')
+WHERE n.nspname='public' AND p.proname IN ('create_mp_pending_sale','finalize_mp_sale','cancel_mp_sale')
 ORDER BY p.proname;

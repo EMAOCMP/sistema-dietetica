@@ -1,36 +1,44 @@
 import { supabase } from './supabase';
 import { upsertProductBarcode } from './productBarcodes';
+import { nextReceiptNumber } from './receipt';
 import {
   getPendingQueue,
   markQueueItemSynced,
   incrementQueueRetries,
+  markQueueItemFailed,
   setLastSyncTime,
   getPendingCount,
 } from './offlineDB';
 
 let syncInProgress = false;
 let syncInterval: ReturnType<typeof setInterval> | null = null;
+let onlineListener: (() => void) | null = null;
+let currentUserId: string | null = null;
 
 const MAX_RETRIES = 5;
 const SYNC_INTERVAL_MS = 10000; // 10 segundos
 const BATCH_SIZE = 5;
 
-export function startSyncEngine() {
+export function startSyncEngine(userId?: string | null) {
+  currentUserId = userId || null;
   if (syncInterval) return;
-  
+
   // Sync inmediato al iniciar
   processQueue();
-  
+
   // Luego cada SYNC_INTERVAL_MS
   syncInterval = setInterval(() => {
     if (navigator.onLine) processQueue();
   }, SYNC_INTERVAL_MS);
-  
+
   // También sincronizar cuando vuelve la conexión
-  window.addEventListener('online', () => {
-    console.log('[Sync] Conexión restaurada, sincronizando...');
-    processQueue();
-  });
+  if (!onlineListener) {
+    onlineListener = () => {
+      console.log('[Sync] Conexión restaurada, sincronizando...');
+      processQueue();
+    };
+    window.addEventListener('online', onlineListener);
+  }
 }
 
 export function stopSyncEngine() {
@@ -38,34 +46,48 @@ export function stopSyncEngine() {
     clearInterval(syncInterval);
     syncInterval = null;
   }
+  if (onlineListener) {
+    window.removeEventListener('online', onlineListener);
+    onlineListener = null;
+  }
+  currentUserId = null;
 }
 
 async function processQueue() {
   if (syncInProgress || !navigator.onLine) return;
-  
+
   syncInProgress = true;
   console.log('[Sync] Iniciando sincronización...');
-  
+
   try {
-    const pending = await getPendingQueue();
+    const pending = await getPendingQueue(currentUserId);
     if (pending.length === 0) {
       syncInProgress = false;
       return;
     }
-    
+
     console.log(`[Sync] ${pending.length} items pendientes`);
-    
-    // Procesar en lotes
+
+    // Procesar en lotes. Cada ítem es independiente: un fallo NO debe abortar el resto.
     for (let i = 0; i < pending.length; i += BATCH_SIZE) {
       if (!navigator.onLine) break;
-      
+
       const batch = pending.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map(processQueueItem));
-      
-      // Pequeña pausa entre lotes
-      await new Promise(r => setTimeout(r, 500));
+      // allSettled: los ítems que fallan se marcan, pero el lote continúa.
+      const results = await Promise.allSettled(batch.map((item) => processQueueItem(item)));
+
+      results.forEach((r, idx) => {
+        if (r.status === 'rejected') {
+          console.error(`[Sync] Item ${batch[idx]?.id} falló y queda en cola para reintento`);
+        }
+      });
+
+      // Pequeña pausa entre lotes (no después del último).
+      if (i + BATCH_SIZE < pending.length) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
     }
-    
+
     try {
       await setLastSyncTime(Date.now());
     } catch (metaErr) {
@@ -81,7 +103,7 @@ async function processQueue() {
 
 async function processQueueItem(item: any) {
   const { id, type, payload, retries } = item;
-  
+
   try {
     switch (type) {
       case 'sale':
@@ -97,23 +119,45 @@ async function processQueueItem(item: any) {
         await syncProductUpdate(payload);
         break;
       default:
-        console.warn('[Sync] Tipo desconocido:', type);
+        // Tipo desconocido: NO se marca como sincronizado (evita perder datos en silencio).
+        throw new Error(`[Sync] Tipo de cola desconocido: ${type}`);
     }
-    
+
     await markQueueItemSynced(id);
     console.log(`[Sync] Item ${id} sincronizado`);
   } catch (err: any) {
     console.error(`[Sync] Error en item ${id}:`, err);
-    
+
     if (retries >= MAX_RETRIES - 1) {
-      console.error(`[Sync] Item ${id} superó max reintentos, se mantiene en cola`);
-      // Podríamos mover a una cola de "dead letter" aquí
+      // Dead-letter: se marca como fallido y deja de reintentarse en cada ciclo.
+      await markQueueItemFailed(id, err?.message || 'Error desconocido');
+      console.error(`[Sync] Item ${id} superó max reintentos y pasó a estado fallido`);
     } else {
       await incrementQueueRetries(id);
     }
-    
+
     throw err;
   }
+}
+
+/** Extrae el detalle de pago del payload de la venta al formato que espera el RPC. */
+function paymentPayloadFromSale(salePayload: any) {
+  const method = salePayload.payment_method || 'cash';
+  const payment: Record<string, unknown> = { method };
+
+  if (method === 'transfer') {
+    if (salePayload.transfer_bank) payment.transfer_bank = salePayload.transfer_bank;
+    if (salePayload.transfer_account) payment.transfer_account = salePayload.transfer_account;
+    if (salePayload.transfer_ref) payment.transfer_ref = salePayload.transfer_ref;
+  } else if (method === 'card') {
+    if (salePayload.card_type) payment.card_type = salePayload.card_type;
+    if (salePayload.card_brand) payment.card_brand = salePayload.card_brand;
+    if (salePayload.card_last4) payment.card_last4 = salePayload.card_last4;
+    if (salePayload.card_auth) payment.card_auth = salePayload.card_auth;
+    if (salePayload.card_installments) payment.card_installments = salePayload.card_installments;
+  }
+
+  return payment;
 }
 
 async function syncSale(payload: any) {
@@ -128,11 +172,22 @@ async function syncSale(payload: any) {
     cost_price: item.cost_price,
   }));
 
+  // Ticket: si la venta offline no lo tiene (no había red para reservarlo),
+  // se reserva ahora para que toda venta tenga correlativo.
+  let receiptNumber: string | null = salePayload.receipt_number || null;
+  if (!receiptNumber) {
+    receiptNumber = await nextReceiptNumber();
+    if (receiptNumber) console.log(`[Sync] Ticket asignado a la venta offline: ${receiptNumber}`);
+  }
+
+  // Idempotencia: la misma clave en todos los reintentos evita ventas duplicadas.
+  const idempotencyKey: string | null = salePayload.idempotency_key || salePayload.op_key || null;
+
   const { data, error } = await supabase.rpc('create_sale', {
     p_customer_name: salePayload.customer_name || 'Cliente General',
     p_total_amount: salePayload.total_amount,
     p_items: items,
-    p_payment: { method: salePayload.payment_method || 'cash' },
+    p_payment: paymentPayloadFromSale(salePayload),
     p_sale_type: salePayload.sale_type || 'internal',
     p_dispatch_type: salePayload.dispatch_type || 'pickup',
     p_notes: salePayload.notes || null,
@@ -142,6 +197,8 @@ async function syncSale(payload: any) {
     p_net_amount: salePayload.net_amount,
     p_iva_amount: salePayload.iva_amount,
     p_profit_amount: salePayload.profit_amount,
+    p_idempotency_key: idempotencyKey,
+    p_receipt_number: receiptNumber,
   });
   if (error) throw error;
 

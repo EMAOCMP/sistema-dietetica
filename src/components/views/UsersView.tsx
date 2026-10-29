@@ -6,6 +6,10 @@ import {
   Crown, Eye, ShoppingCart, Users, RefreshCw, ChevronDown,
 } from 'lucide-react';
 import { EmptyState } from '../../features/onboarding';
+import {
+  canChangeRoles as canChangeUserRoles,
+  canViewUsers,
+} from '../../lib/permissions';
 
 interface UsersViewProps {
   currentUser: Profile | null;
@@ -40,7 +44,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
 
 const PERMISSIONS: Record<UserRole, string[]> = {
   admin: ['Productos', 'Costos', 'Usuarios', 'Reportes', 'Caja'],
-  supervisor: ['Stock', 'Alertas', 'Reportes', 'Ventas'],
+  supervisor: ['Stock', 'Alertas', 'Reportes', 'Ventas', 'Usuarios (ver)'],
   vendedor: ['Caja / POS'],
 };
 
@@ -77,6 +81,10 @@ export function UsersView({ currentUser }: UsersViewProps) {
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     setOpenRoleMenu(null);
+    if (!canChangeUserRoles(currentUser?.role)) {
+      alert('Solo los administradores pueden cambiar roles.');
+      return;
+    }
     if (currentUser?.id === userId && newRole !== 'admin') {
       alert('No puedes quitarte el rol de Administrador a ti mismo.');
       return;
@@ -134,7 +142,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
     }
   };
 
-  if (!['admin', 'supervisor', 'vendedor'].includes(currentUser?.role || '')) {
+  if (!canViewUsers(currentUser?.role)) {
     return (
       <div className="p-8 text-center">
         <div className="glass-card rounded-3xl p-10 max-w-md mx-auto">
@@ -150,8 +158,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
     );
   }
 
-  const canChangeRoles = ['admin', 'supervisor', 'vendedor'].includes(currentUser?.role || '');
-  const roleCounts = {
+  const canChangeRoles = canChangeUserRoles(currentUser?.role);  const roleCounts = {
     admin: users.filter((u) => u.role === 'admin').length,
     supervisor: users.filter((u) => u.role === 'supervisor').length,
     vendedor: users.filter((u) => u.role === 'vendedor').length,

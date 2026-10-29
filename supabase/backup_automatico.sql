@@ -8,18 +8,26 @@
 --   O desde el Dashboard: Edge Functions → nueva función "daily-backup"
 --   → pegar el archivo → Deploy.
 --
--- Paso 2: habilitar extensiones (Dashboard → Database → Extensions):
---   pg_cron y pg_net.
+-- Paso 2: crear el secret BACKUP_TOKEN en la Edge Function
+--   (Dashboard → Edge Functions → daily-backup → Secrets)
+--   El valor es un token largo y aleatorio, por ejemplo:
+--     openssl rand -hex 32
 --
--- Paso 3: reemplazar <ANON_KEY> abajo con tu anon key
---   (la misma de .env.local / Site Settings → API).
+-- Paso 3: habilitar extensiones (Dashboard → Database → Extensions):
+--   pg_cron, pg_net y vault.
 --
--- Paso 4: ejecutar este archivo en el SQL Editor.
+-- Paso 4: guardar el mismo token en Supabase Vault (se ejecuta UNA vez):
+--   SELECT vault.create_secret('<PEGAR_AQUI_EL_BACKUP_TOKEN>', 'backup_function_token');
+--
+-- Paso 5: ejecutar este archivo en el SQL Editor.
 --
 -- Qué hace: todos los días a las 04:00 ART (07:00 UTC) llama a la
 -- Edge Function, que exporta a JSON las ventas/ítems/pagos/gastos de
 -- las últimas 24 h + los últimos 3 cierres de caja + snapshot de
 -- productos, y lo sube al bucket privado "backups".
+--
+-- NOTA DE SEGURIDAD: el token NO vive en este archivo. Se lee de
+-- Supabase Vault, así que el repositorio no expone ninguna credencial.
 -- ============================================
 
 BEGIN;
@@ -38,7 +46,12 @@ SELECT cron.schedule(
     url := 'https://frhnuxgxdtfxpifadkgl.supabase.co/functions/v1/daily-backup',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZyaG51eGd4ZHRmeHBpZmFka2dsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NDI3NTAsImV4cCI6MjEwNDIxODc1MH0.r1HVEztS0KszXkDCo-GmoLpyoPedXMEjkdD0fVlC2H0'
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret
+        FROM vault.decrypted_secrets
+        WHERE name = 'backup_function_token'
+        LIMIT 1
+      )
     ),
     body := '{}'::jsonb
   ) AS request_id;

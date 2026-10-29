@@ -1,13 +1,28 @@
 const { chromium } = require('@playwright/test');
 
+// Credenciales por variables de entorno (NO hardcodeadas en el repo).
+//   set SCAN_CHECK_EMAIL=tu@email.com
+//   set SCAN_CHECK_PASSWORD=tu-password
+//   node scan_check.cjs
+const EMAIL = process.env.SCAN_CHECK_EMAIL;
+const PASSWORD = process.env.SCAN_CHECK_PASSWORD;
+
+if (!EMAIL || !PASSWORD) {
+  console.error(
+    'Faltan SCAN_CHECK_EMAIL y SCAN_CHECK_PASSWORD.\n' +
+    'Ejemplo (PowerShell): $env:SCAN_CHECK_EMAIL="tu@email.com"; $env:SCAN_CHECK_PASSWORD="tu-password"; node scan_check.cjs'
+  );
+  process.exit(1);
+}
+
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1408, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
-  await page.fill('input[type="email"]', 'nekrok22k@gmail.com');
-  await page.fill('input[type="password"]', 'Vishal2026!');
+  await page.fill('input[type="email"]', EMAIL);
+  await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForSelector('text=Resumen Operativo', { timeout: 25000 });
   await page.click('text=Productos');

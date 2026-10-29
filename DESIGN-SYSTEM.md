@@ -471,11 +471,14 @@ Reglas:
 
 **Carteles del tour (coach marks)**
 
-- Fondo **opaco** (`bg-white dark:bg-[#1F1F1F]` + borde), nunca `glass-card`: el elemento resaltado queda sin oscurecer detrás del cartel y el `backdrop-blur` lo convertía en una mancha borrosa.
-- Ancho fijo 340 px (desktop); en mobile, hoja inferior a 12 px de los bordes.
-- Cabecera: chip de ícono `w-8 h-8 rounded-xl bg-brand-500/15` + nombre de la guía en mayúsculas (`text-[10px] font-extrabold uppercase tracking-widest`) + "Paso X de Y".
-- Spotlight: `boxShadow: 0 0 0 2px rgba(99,102,241,.95), 0 0 0 7px rgba(99,102,241,.22), 0 0 0 9999px rgba(2,6,23,.74)` → halo índigo que marca el elemento.
-- Posición: `computeTipBox()` elige el lado pedido (top/bottom/left/right) y **evita tapar el elemento resaltado**; si no cabe, prueba los otros lados y, como último recurso, elige la posición que menos lo superpone. Nunca queda bajo el header de la app (`TOP_SAFE = 76`).
+- Fondo **opaco** (`.tour-card`: `#fff` / `#1c1c1f` + borde), nunca `glass-card`: el elemento resaltado queda sin oscurecer detrás del cartel y el `backdrop-blur` lo convertía en una mancha borrosa.
+- Ancho fijo 340 px (desktop); en mobile, hoja inferior a 12 px de los bordes, con tirador y `env(safe-area-inset-bottom)`.
+- Cabecera: chip de ícono `w-9 h-9 rounded-xl bg-brand-500/15` + nombre de la guía en mayúsculas (`text-[10px] font-bold uppercase tracking-[0.14em]`) + "Paso X de Y".
+- Flecha (`.tour-caret`): rombo de 12 px con solo dos bordes visibles que conecta la tarjeta con el objetivo; se orienta según el lado elegido y se mantiene dentro del ancho/alto de la tarjeta.
+- Progreso **segmentado**: un tramo por paso (activos en `brand-500`, pendientes en `slate-200`/`white/10`).
+- Spotlight: halo `0 0 0 2px rgba(99,102,241,.95), 0 0 0 7px rgba(99,102,241,.22)` + scrim `0 0 0 9999px rgba(2,6,23,.68)`; el radio del hueco se copia del elemento resaltado.
+- Posición: `computeTipBox()` elige el lado pedido (top/bottom/left/right) y **evita tapar el elemento resaltado**; si no cabe, prueba los otros lados y, como último recurso, elige la posición que menos lo superpone. Nunca queda bajo el header de la app (`TOP_SAFE = 76`) y devuelve `side` para dibujar la flecha.
+- Accesibilidad: foco al cartel al abrir (se restaura al cerrar), scroll de la página bloqueado, `aria-modal` + `aria-labelledby`/`aria-describedby`, y atajos visibles (`←` `→` navegar, `Esc` salir). El contenido cambia con `key={tourStep}` y animación `tour-step-in`.
 
 ### 4.14 Escáner y balanza (`features/scanner/`)
 

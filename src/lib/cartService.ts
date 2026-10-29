@@ -8,6 +8,43 @@ import type { CartItem, Product } from '../types';
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const roundQty = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Acepta coma o punto decimal: "12,50" → 12.5, "12.50" → 12.5.
+ * Maneja el formato argentino con separador de miles: "1.234,56" → 1234.56.
+ */
+export const parseAmount = (raw: string | number | null | undefined): number => {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  if (!raw) return 0;
+  let s = String(raw).trim().replace(/\s/g, '');
+  if (!s) return 0;
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+
+  if (hasComma && hasDot) {
+    // El separador que aparece último es el decimal; el otro es de miles.
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    s = s.replace(',', '.');
+  } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(s)) {
+    // Patrón estricto de miles es-AR: "1.234" → 1234 (no 1.234).
+    s = s.replace(/\./g, '');
+  }
+
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Stock disponible del producto. Si no hay dato numérico, se trata como ilimitado. */
+export const stockOf = (product: Pick<Product, 'stock_quantity'>): number => {
+  const n = Number(product.stock_quantity);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+};
+
 export interface DiscountInput {
   discountType: 'percent' | 'fixed';
   discountValue: string;
@@ -25,6 +62,14 @@ export const priceOf = (item: CartItem) =>
 export const itemSubtotal = (item: CartItem) =>
   priceOf(item) * item.quantity * (1 - (item.discount || 0) / 100);
 
+/** Descuento aplicado a la línea, en pesos. */
+export const itemDiscountAmount = (item: CartItem) =>
+  priceOf(item) * item.quantity * ((item.discount || 0) / 100);
+
+/** Margen bruto de la línea (precio - costo), ya descontado el descuento de la línea. */
+export const itemProfit = (item: CartItem) =>
+  (priceOf(item) - item.product.cost_price) * item.quantity - itemDiscountAmount(item);
+
 export interface Totals {
   rawSubtotal: number;
   discountVal: number;
@@ -36,25 +81,30 @@ export interface Totals {
 
 export function computeTotals(cart: CartItem[], discount: DiscountInput, delivery: DeliveryInput): Totals {
   const rawSubtotal = cart.reduce((acc, item) => acc + itemSubtotal(item), 0);
+  const discountPct = discount.discountType === 'percent'
+    ? Math.min(100, Math.max(0, parseAmount(discount.discountValue)))
+    : 0;
   const discountVal = discount.discountType === 'percent'
-    ? (rawSubtotal * (parseFloat(discount.discountValue) || 0)) / 100
-    : Math.min(rawSubtotal, parseFloat(discount.discountValue) || 0);
+    ? (rawSubtotal * discountPct) / 100
+    : Math.min(Math.max(0, rawSubtotal), Math.max(0, parseAmount(discount.discountValue)));
   const subtotalAfterDiscount = Math.max(0, rawSubtotal - discountVal);
 
+  const deliveryPct = delivery.deliveryFeeType === 'percent'
+    ? Math.min(100, Math.max(0, parseAmount(delivery.deliveryFeeValue)))
+    : 0;
   const deliveryFee = delivery.dispatchType === 'delivery'
     ? delivery.deliveryFeeType === 'free'
       ? 0
       : delivery.deliveryFeeType === 'fixed'
-        ? parseFloat(delivery.deliveryFeeValue) || 0
-        : (subtotalAfterDiscount * (parseFloat(delivery.deliveryFeeValue) || 0)) / 100
+        ? Math.max(0, parseAmount(delivery.deliveryFeeValue))
+        : (subtotalAfterDiscount * deliveryPct) / 100
     : 0;
 
   const totalAmount = Math.max(0, subtotalAfterDiscount + deliveryFee);
 
-  const totalProfit = cart.reduce((acc, item) => {
-    const profitPerUnit = priceOf(item) - item.product.cost_price;
-    return acc + profitPerUnit * item.quantity;
-  }, 0) - discountVal + deliveryFee;
+  // Ganancia = margen de cada línea (ya con su descuento) menos el descuento global.
+  // El envío NO se suma: es un cobro al cliente, no margen del negocio.
+  const totalProfit = cart.reduce((acc, item) => acc + itemProfit(item), 0) - discountVal;
 
   return { rawSubtotal, discountVal, subtotalAfterDiscount, deliveryFee, totalAmount, totalProfit };
 }
@@ -74,7 +124,7 @@ export function addToCart(
   priceType: CartItem['priceType']
 ): AddResult {
   const inCart = cart.find((i) => i.product.id === product.id)?.quantity || 0;
-  const available = Number(product.stock_quantity);
+  const available = stockOf(product);
 
   let clampedTo: number | null = null;
   if (inCart + quantity > available) {
@@ -107,7 +157,7 @@ export function updateQuantity(
 ): CartItem[] | null {
   const item = cart.find((i) => i.product.id === productId);
   if (!item) return cart;
-  if (delta > 0 && item.quantity + delta > Number(item.product.stock_quantity)) return null;
+  if (delta > 0 && item.quantity + delta > stockOf(item.product)) return null;
   return cart
     .map((i) => {
       if (i.product.id !== productId) return i;
@@ -117,17 +167,42 @@ export function updateQuantity(
     .filter((i): i is CartItem => i !== null);
 }
 
+/** Fija una cantidad exacta respetando el stock disponible. */
+export function setQuantity(
+  cart: CartItem[],
+  productId: string,
+  quantity: number
+): CartItem[] | null {
+  const item = cart.find((i) => i.product.id === productId);
+  if (!item) return cart;
+  const qty = roundQty(quantity);
+  if (qty > stockOf(item.product)) return null;
+  if (qty <= 0) {
+    return cart.filter((i) => i.product.id !== productId);
+  }
+  return cart.map((i) => (i.product.id === productId ? { ...i, quantity: qty } : i));
+}
+
 /** Cambia el precio mayorista/minorista de TODO el carrito. */
 export const setCartPriceType = (cart: CartItem[], t: CartItem['priceType']): CartItem[] =>
   cart.map((item) => ({ ...item, priceType: t }));
 
-/** Restaura ítems quitados (deshacer). */
+/** Restaura ítems quitados (deshacer). No muta el estado y respeta el stock. */
 export function restoreRemoved(cart: CartItem[], removed: CartItem[]): CartItem[] {
-  const next = [...cart];
+  let next = [...cart];
   removed.forEach((ri) => {
     const ex = next.find((i) => i.product.id === ri.product.id);
-    if (ex) ex.quantity = roundQty(ex.quantity + ri.quantity);
-    else next.push(ri);
+    if (ex) {
+      const target = roundQty(ex.quantity + ri.quantity);
+      const max = stockOf(ex.product);
+      next = next.map((i) =>
+        i.product.id === ri.product.id
+          ? { ...i, quantity: Number.isFinite(max) ? Math.min(target, max) : target }
+          : i
+      );
+    } else {
+      next = [...next, ri];
+    }
   });
   return next;
 }

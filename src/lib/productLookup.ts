@@ -1,4 +1,5 @@
-import { supabase } from './supabase';
+import { resolveBarcode } from '../features/scanner/services/barcodeResolver';
+import { normalizeCode as normalizeScannerCode } from '../features/scanner/services/barcodeNormalizer';
 
 export interface FoundProduct {
   id: string;
@@ -11,7 +12,12 @@ export interface FoundProduct {
   matchedVia: 'primary' | 'alias';
 }
 
-/** Normaliza: trim + solo dígitos/letras básicos */
+/**
+ * Normaliza: trim + solo dígitos/letras básicos.
+ * Nota: el normalizador canónico del escáner (features/scanner) es más estricto
+ * (uppercase, quita separadores y convierte UPC-A de 12 a EAN-13).
+ * Este se mantiene simple para no romper los match locales con alias cacheados.
+ */
 export function normalizeCode(raw: string): string {
   return (raw || '').trim();
 }
@@ -37,45 +43,30 @@ export function isPlausibleCode(code: string): { ok: boolean; reason?: string } 
   return { ok: true };
 }
 
-/** Busca producto por código: primero aliases, después campo primario. */
+/**
+ * Busca producto por código delegando en el resolver canónico del escáner
+ * (que consulta `product_barcodes.barcode_normalized` + `active = true`).
+ * Antes esta función duplicaba la lógica con reglas distintas y devolvía
+ * aliases desactivados.
+ */
 export async function findProductByBarcode(rawCode: string): Promise<FoundProduct | null> {
-  const code = normalizeCode(rawCode);
+  const code = normalizeScannerCode(rawCode);
   if (!code) return null;
 
-  // 1. Aliases
-  try {
-    const { data: alias } = await supabase
-      .from('product_barcodes')
-      .select('product_id, products(id, name, stock_quantity, retail_price, wholesale_price, category, barcode)')
-      .eq('barcode', code)
-      .maybeSingle();
-    const p: any = (alias as any)?.products;
-    if (p) {
-      return {
-        id: p.id,
-        name: p.name,
-        stock_quantity: Number(p.stock_quantity),
-        retail_price: Number(p.retail_price),
-        wholesale_price: Number(p.wholesale_price),
-        category: p.category,
-        barcode: code,
-        matchedVia: 'alias',
-      };
-    }
-  } catch { /* tabla puede no existir todavía */ }
+  const resolution = await resolveBarcode(code);
+  if (resolution.status !== 'found' || !resolution.product) return null;
 
-  // 2. Campo primario
-  try {
-    const { data } = await supabase
-      .from('products')
-      .select('id, name, stock_quantity, retail_price, wholesale_price, category, barcode')
-      .eq('barcode', code)
-      .maybeSingle();
-    if (data) {
-      return { ...(data as any), stock_quantity: Number((data as any).stock_quantity), retail_price: Number((data as any).retail_price), wholesale_price: Number((data as any).wholesale_price), barcode: code, matchedVia: 'primary' };
-    }
-  } catch { /* noop */ }
-  return null;
+  const p = resolution.product as any;
+  return {
+    id: p.id,
+    name: p.name,
+    stock_quantity: Number(p.stock_quantity ?? 0),
+    retail_price: Number(p.retail_price ?? 0),
+    wholesale_price: Number(p.wholesale_price ?? 0),
+    category: p.category ?? null,
+    barcode: p.barcode || code,
+    matchedVia: resolution.matchedVia === 'alias' ? 'alias' : 'primary',
+  };
 }
 
 /** Match local (caché offline): campo primario + aliases cacheados. */

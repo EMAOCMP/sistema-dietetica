@@ -14,11 +14,14 @@ import { RevenueBreakdown } from '../charts/RevenueBreakdown';
 import { StockBreakdown } from '../charts/StockBreakdown';
 // Exportaciones de ventas: xlsx dinámico (exportXlsx)
 import { netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
+import { canAnnulSales, isSeller } from '../../lib/permissions';
+import { normalizePaymentMethod } from '../../lib/paymentMethods';
+import { fmtMoney0 } from '../../lib/format';
 import { useOnboarding } from '../../features/onboarding';
 import { loadMetaSchedule, hoursOf, formatHour } from '../../lib/metaSchedule';
 
 const DAY_LABELS = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
-const money0 = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const money0 = (n: number) => fmtMoney0(n).replace('$', '');
 
 export interface SaleWithItems {
   id: string;
@@ -78,7 +81,8 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
     if (localTimer.current) window.clearTimeout(localTimer.current);
     localTimer.current = window.setTimeout(() => setLocalToast(null), 3500);
   };
-  const canAnnul = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
+  const canAnnul = canAnnulSales(profile?.role);
+  const sellerOnly = isSeller(profile?.role);
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom'>('today');
   const [customRange, setCustomRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [showCustomPopover, setShowCustomPopover] = useState(false);
@@ -95,6 +99,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
     cashTotal: 0,
     transferTotal: 0,
     cardTotal: 0,
+    mpTotal: 0,
     pickupCount: 0,
     deliveryCount: 0,
     salesByUser: {} as Record<string, number>,
@@ -295,7 +300,8 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       document.removeEventListener('visibilitychange', onVisible);
     };
     // customRange incluido: elegir fechas dispara la recarga del período
-  }, [dateRange, customRange]);
+    // profile incluido: el filtro por vendedor depende del rol resuelto
+  }, [dateRange, customRange, profile?.id]);
 
   const fetchDashboardData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -402,18 +408,23 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         `;
       let allSales: any[] | null = null;
       let salesError: any = null;
-      ({ data: allSales, error: salesError } = await supabase
+      let salesQuery = supabase
         .from('sales')
         .select(salesSelect(itemsWithDiscount))
         .gte('created_at', fetchFrom.toISOString())
-        .order('created_at', { ascending: false }));
+        .order('created_at', { ascending: false });
+      // El vendedor solo puede ver sus propias ventas (RLS sales_select_own).
+      if (sellerOnly && profile?.id) salesQuery = salesQuery.eq('user_id', profile.id);
+      ({ data: allSales, error: salesError } = await salesQuery);
       if (salesError && salesError.message?.includes('discount_amount')) {
         // Esquema viejo (falta reportes_mejoras.sql): reintentar sin la columna
-        ({ data: allSales, error: salesError } = await supabase
+        let retryQuery = supabase
           .from('sales')
           .select(salesSelect(itemsBase))
           .gte('created_at', fetchFrom.toISOString())
-          .order('created_at', { ascending: false }));
+          .order('created_at', { ascending: false });
+        if (sellerOnly && profile?.id) retryQuery = retryQuery.eq('user_id', profile.id);
+        ({ data: allSales, error: salesError } = await retryQuery);
       }
 
       if (salesError) {
@@ -487,13 +498,16 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       let cashT = 0;
       let transferT = 0;
       let cardT = 0;
+      let mpT = 0;
       let pickupC = 0;
       let deliveryC = 0;
 
       periodSales.forEach((s) => {
         const amt = Number(s.total_amount);
-        if (s.payment_method === 'transfer') transferT += amt;
-        else if (s.payment_method === 'card') cardT += amt;
+        const method = normalizePaymentMethod(s.payment_method);
+        if (method === 'transfer') transferT += amt;
+        else if (method === 'card') cardT += amt;
+        else if (method === 'mercadopago') mpT += amt;
         else cashT += amt;
 
         if (s.dispatch_type === 'delivery') deliveryC += 1;
@@ -569,6 +583,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         cashTotal: cashT,
         transferTotal: transferT,
         cardTotal: cardT,
+        mpTotal: mpT,
         pickupCount: pickupC,
         deliveryCount: deliveryC,
         salesByUser: byUser,
@@ -754,6 +769,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       cashTotal: stats.cashTotal,
       transferTotal: stats.transferTotal,
       cardTotal: stats.cardTotal,
+      mpTotal: stats.mpTotal,
       bestSellers,
       categoryProfits,
       sales: salesList,
@@ -866,7 +882,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
           {localToast}
         </div>
       )}
-      {!canAnnul && profile && (
+      {sellerOnly && profile && (
         <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
           <ShoppingBag size={18} className="text-amber-600 shrink-0 mt-0.5" />
           <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
@@ -884,9 +900,9 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               {dateRange === 'custom'
                 ? `Rango elegido: ${customRange.start || '—'} → ${customRange.end || 'hoy'} — no hay ventas registradas en esas fechas.`
                 : 'No hay ventas registradas en este período.'}{' '}
-              {canAnnul
-                ? 'Probá con Hoy, Semana o Mes, o elegí otro rango de fechas.'
-                : 'Si esperabas ver ventas de otros vendedores: con tu cuenta solo se muestran las tuyas.'}
+              {sellerOnly
+                ? 'Si esperabas ver ventas de otros vendedores: con tu cuenta solo se muestran las tuyas.'
+                : 'Probá con Hoy, Semana o Mes, o elegí otro rango de fechas.'}
             </p>
           </div>
         </div>
@@ -1338,7 +1354,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             </div>
             <div className="flex justify-between items-center">
               <span className="font-medium text-[#64748b] dark:text-[#9E9E9E]">Digital</span>
-              <span className="font-bold tnum text-[#0f172a] dark:text-white">${(stats.transferTotal + stats.cardTotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="font-bold tnum text-[#0f172a] dark:text-white">${(stats.transferTotal + stats.cardTotal + stats.mpTotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
@@ -1507,6 +1523,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             { label: 'Efectivo', value: stats.cashTotal, color: '#10b981' },
             { label: 'Tarjeta', value: stats.cardTotal, color: '#3B82F6' },
             { label: 'Transferencia', value: stats.transferTotal, color: '#f59e0b' },
+            { label: 'Mercado Pago', value: stats.mpTotal, color: '#a855f7' },
           ]}
           size={150}
         />
@@ -1967,6 +1984,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             cashTotal={stats.cashTotal}
             transferTotal={stats.transferTotal}
             cardTotal={stats.cardTotal}
+            mpTotal={stats.mpTotal}
             pickupCount={stats.pickupCount}
             deliveryCount={stats.deliveryCount}
             sales={salesList}

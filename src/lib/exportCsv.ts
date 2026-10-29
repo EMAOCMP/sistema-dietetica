@@ -4,6 +4,8 @@
  * - separador ";" (el que Excel es-AR espera)
  * - comillas escapadas
  */
+import { fmtMoneyPlain } from './format';
+
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const esc = (v: string | number) => {
     const s = String(v ?? '');
@@ -29,10 +31,7 @@ export function stampName(prefix: string) {
 
 /** Monto prolijo para CSV es-AR: "1.234,56" (Excel lo lee como número). */
 export function fmtMoney(n: unknown): string {
-  if (n === null || n === undefined || n === '') return '';
-  const v = Number(n);
-  if (!isFinite(v)) return '';
-  return v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return fmtMoneyPlain(n);
 }
 
 export interface ContadorRow {
@@ -74,7 +73,7 @@ export function downloadContadorCsv(prefix: string, periodo: string, rows: Conta
     ['Anuladas (cantidad)', anuladas.length],
     ['Anuladas (monto)', fmtMoney(sum(anuladas))],
     [],
-    ['DETALLE', '', '', '', '', '', '', '', '', '', ''],
+    ['DETALLE', '', '', '', '', '', '', '', '', '', '', '', '', ''],
     ['Ticket', 'Fecha', 'Cliente', 'CUIT/DNI', 'Vendedor', 'Pago', 'Tipo doc', 'N° Factura', 'CAE', 'Cond. IVA', 'Neto', 'IVA', 'Estado', 'Total'],
     ...rows.map((r) => [
       r.ticket, r.fecha, r.cliente, r.doc || '', r.vendedor, r.pago, r.tipo, '', '', r.ivaCond || '',

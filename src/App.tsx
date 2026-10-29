@@ -12,6 +12,7 @@ import { MobileTabBar } from './components/layout/MobileTabBar';
 import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar, Question } from '@phosphor-icons/react';
 import { Plus, Check } from 'lucide-react';
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine';
+import { clearOfflineData } from './lib/offlineDB';
 import { ScannerProvider } from './features/scanner/ScannerProvider';
 import { OnboardingProvider, ProductTour, GuideCenter, SectionHint, useOnboarding, hasCompletedTour, CHECKLIST_SECTIONS } from './features/onboarding';
 
@@ -127,14 +128,18 @@ export function App() {
       }
     });
 
-    // Iniciar motor de sincronización offline
-    startSyncEngine();
-
     return () => {
       subscription.unsubscribe();
-      stopSyncEngine();
     };
   }, []);
+
+  // Motor de sincronización offline: arranca con la sesión resuelta para que
+  // la cola se sincronice con el usuario correcto (aislamiento por user_id).
+  useEffect(() => {
+    if (!profile?.id) return;
+    startSyncEngine(profile.id);
+    return () => stopSyncEngine();
+  }, [profile?.id]);
 
   type ToastKind = 'info' | 'success' | 'warning' | 'error';
   const [toastKind, setToastKind] = useState<ToastKind>('info');
@@ -160,6 +165,14 @@ export function App() {
 
       if (error) {
         console.warn('Fetch profile failed (offline?), using auth metadata:', error.message);
+        // Sin red no se puede leer `profiles`: se usa un perfil sintético de
+        // privilegio mínimo en lugar de dejar `profile` en null.
+        setProfile({
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || 'Usuario',
+          role: 'vendedor',
+        });
       } else if (!data) {
         const newProfileData = {
           id: user.id,
@@ -196,6 +209,15 @@ export function App() {
   };
 
   const handleLogout = async () => {
+    // Limpiar el cache y la cola offline ANTES de cerrar sesión:
+    // si no, el siguiente usuario del dispositivo hereda los datos y las
+    // ventas pendientes del usuario anterior.
+    try {
+      stopSyncEngine();
+      await clearOfflineData();
+    } catch (err) {
+      console.warn('No se pudo limpiar el almacenamiento local offline:', err);
+    }
     await supabase.auth.signOut();
   };
 

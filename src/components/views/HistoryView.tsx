@@ -10,11 +10,17 @@ import {
   WhatsappLogo,
   Printer,
   Copy,
+  FilePdf,
+  SpinnerGap,
 } from '@phosphor-icons/react';
 import { RoundedSelect } from '../ui/RoundedSelect';
 // Exportaciones: xlsx dinámico (ver botones Exportar / Para contador)
 import { netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
-import { loadBusiness } from '../../lib/businessSettings';
+import { loadBusiness, loadCopyToMe, saveCopyToMe } from '../../lib/businessSettings';
+import { isValidPhone, normalizePhone, sendTicketWhatsApp } from '../../lib/whatsapp';
+import { buildTicketText, type TicketData } from '../../lib/ticketText';
+import { ticketPdfFile, downloadTicketPdf } from '../../lib/ticketPdf';
+import { shareFile } from '../../lib/share';
 import { EmptyState } from '../../features/onboarding';
 import { ContextualTooltip } from '../../features/onboarding';
 
@@ -71,6 +77,10 @@ export function HistoryView() {
   const [historyPhone, setHistoryPhone] = useState('');
   const [waError, setWaError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
+  // Copia de cada comprobante reenviado al WhatsApp del dueño del negocio.
+  const myWhatsapp = useMemo(() => normalizePhone(loadBusiness().myWhatsapp), []);
+  const [copyToMe, setCopyToMe] = useState(() => loadCopyToMe());
 
   useEffect(() => {
     fetchSalesHistory();
@@ -160,53 +170,123 @@ export function HistoryView() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageItems = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-  const buildHistoryTicketText = (sale: SaleRecord) => {
-    const lines: string[] = [];
-    const biz = loadBusiness();
-    lines.push(`${biz.name} - ${sale.receipt_number ? `N° ${sale.receipt_number}` : `Ticket #${sale.id.slice(0, 8).toUpperCase()}`}`);
-    if (biz.address) lines.push(biz.address);
-    if (biz.phone) lines.push(`Tel: ${biz.phone}`);
-    lines.push(`Cliente: ${sale.customer_name}`);
-    if (sale.sale_type === 'afip') {
-      if ((sale as any).customer_doc) lines.push(`CUIT/DNI: ${(sale as any).customer_doc}`);
-      lines.push(`Cond. IVA: ${(sale as any).customer_iva_cond || 'CF'}`);
+  /** Arma el modelo de ticket (compartido por WhatsApp, impresión y PDF). */
+  const toTicketData = (sale: SaleRecord): TicketData => {
+    const raw = sale as any;
+    const items = (sale.sale_items || []).map((it) => ({
+      name: it.products?.name || 'Producto',
+      quantity: Number(it.quantity) || 0,
+      unitPrice: Number(it.unit_price) || 0,
+      subtotal: Number(it.subtotal) || 0,
+    }));
+
+    const paymentDetails: string[] = [];
+    if (sale.payment_method === 'transfer') {
+      if (raw.transfer_bank) paymentDetails.push(`Banco origen: ${raw.transfer_bank}`);
+      if (raw.transfer_account) paymentDetails.push(`Cuenta destino: ${raw.transfer_account}`);
+      if (raw.transfer_ref) paymentDetails.push(`Comprobante: ${raw.transfer_ref}`);
     }
-    lines.push(`Fecha: ${new Date(sale.created_at).toLocaleString('es-AR')}`);
-    lines.push(`Pago: ${paymentLabel(sale.payment_method)} | Despacho: ${dispatchLabel(sale.dispatch_type)}`);
-    lines.push(``);
-    const items = sale.sale_items || [];
-    if (items.length === 0) {
-      lines.push(`(Detalle de items no registrado - venta antigua)`);
-    } else {
-      items.forEach((it) => {
-        lines.push(`- ${it.products?.name || 'Producto'} x${it.quantity} - $${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-      });
+    if (sale.payment_method === 'card') {
+      const det = [
+        raw.card_type === 'credit' ? 'Crédito' : raw.card_type === 'debit' ? 'Débito' : null,
+        raw.card_brand,
+        raw.card_last4 ? `****${raw.card_last4}` : null,
+      ].filter(Boolean).join(' · ');
+      if (det) paymentDetails.push(`Tarjeta: ${det}`);
+      if (raw.card_auth) paymentDetails.push(`Autorización: ${raw.card_auth}`);
+      if (raw.card_type === 'credit' && raw.card_installments) paymentDetails.push(`Cuotas: ${raw.card_installments}`);
     }
-    lines.push(``);
-    if (sale.sale_type === 'afip') {
-      lines.push(`Neto: $${Number((sale as any).net_amount ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-      lines.push(`IVA 21%: $${Number((sale as any).iva_amount ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    }
-    lines.push(`TOTAL: $${Number(sale.total_amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    lines.push(``);
-    lines.push(`¡Gracias por elegir saludable! 🌱`);
-    if (biz.footer) lines.push(biz.footer);
-    return lines.join('\n');
+
+    const discountAmount = Number(raw.discount_amount) || 0;
+
+    return {
+      saleId: sale.id,
+      receiptNumber: sale.receipt_number || null,
+      dateLabel: new Date(sale.created_at).toLocaleString('es-AR'),
+      customerName: sale.customer_name || 'Cliente General',
+      customerDoc: raw.customer_doc || null,
+      customerIvaCond: raw.customer_iva_cond || null,
+      saleType: sale.sale_type,
+      paymentMethod: sale.payment_method || 'cash',
+      dispatchType: sale.dispatch_type || 'pickup',
+      paymentDetails,
+      notes: raw.notes || null,
+      items,
+      subtotal: items.reduce((a, i) => a + i.subtotal, 0),
+      discountLabel: discountAmount > 0 ? '' : null,
+      discountAmount,
+      deliveryFee: 0,
+      deliveryFeeFree: sale.dispatch_type !== 'delivery',
+      netAmount: Number(raw.net_amount) || 0,
+      ivaAmount: Number(raw.iva_amount) || 0,
+      totalAmount: Number(sale.total_amount) || 0,
+      sellerName: sale.profiles?.full_name || 'Vendedor',
+    };
   };
 
+  const buildHistoryTicketText = (sale: SaleRecord) => buildTicketText(toTicketData(sale));
+
   const handleHistoryWhatsApp = (sale: SaleRecord) => {
-    const cleanPhone = (historyPhone || '').replace(/\D/g, '');
+    const cleanPhone = normalizePhone(historyPhone);
     if (!cleanPhone) {
       setWaError('Ingresá el número de WhatsApp (Ej: 5491123456789).');
       return;
     }
-    if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+    if (!isValidPhone(cleanPhone)) {
       setWaError('Número incompleto. Usá 549 + área + número, sin 0, sin 15, sin +.');
       return;
     }
+
+    const myPhone = normalizePhone(loadBusiness().myWhatsapp);
+    const copyPhone = copyToMe && isValidPhone(myPhone) ? myPhone : '';
+
     setWaError('');
-    const encoded = encodeURIComponent(buildHistoryTicketText(sale));
-    window.open(`https://wa.me/${cleanPhone}?text=${encoded}`, '_blank', 'noopener,noreferrer');
+    const result = sendTicketWhatsApp({
+      toPhone: cleanPhone,
+      text: buildHistoryTicketText(sale),
+      copyPhone,
+    });
+
+    if (!result.customerOpened) {
+      setWaError('No se pudo abrir WhatsApp. Permití las ventanas emergentes o usá "Copiar".');
+      return;
+    }
+    if (copyPhone && !result.copyOpened) {
+      setWaError('Se abrió el chat del cliente, pero la copia a tu WhatsApp fue bloqueada. Permití las ventanas emergentes.');
+    }
+  };
+
+  /**
+   * Ticket en PDF. En el móvil abre la hoja de compartir del sistema (se elige
+   * WhatsApp y el PDF viaja como documento). En escritorio se descarga.
+   */
+  const handleHistoryPdf = async (sale: SaleRecord) => {
+    if (pdfBusyId) return;
+    setPdfBusyId(sale.id);
+    setWaError('');
+    try {
+      const data = toTicketData(sale);
+      const file = ticketPdfFile(data);
+      const outcome = await shareFile(file, {
+        title: `Ticket ${sale.receipt_number || sale.id.slice(0, 8).toUpperCase()}`,
+        text: `Comprobante ${sale.receipt_number || ''} - ${sale.customer_name}`,
+      });
+
+      if (outcome === 'downloaded') {
+        setWaError('PDF descargado. Abrí WhatsApp y adjuntá el archivo.');
+        const cleanPhone = normalizePhone(historyPhone);
+        if (isValidPhone(cleanPhone)) {
+          sendTicketWhatsApp({ toPhone: cleanPhone, text: buildHistoryTicketText(sale) });
+        }
+      } else if (outcome === 'unsupported') {
+        downloadTicketPdf(data);
+        setWaError('PDF descargado.');
+      }
+    } catch (e: any) {
+      setWaError(`No se pudo generar el PDF: ${e?.message || e}`);
+    } finally {
+      setPdfBusyId(null);
+    }
   };
 
   const handleHistoryCopy = async (sale: SaleRecord) => {
@@ -299,37 +379,16 @@ export function HistoryView() {
     if (!confirm(`¿Anular la venta #${sale.id.slice(0, 8)} de $${Number(sale.total_amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}? Se devuelve el stock.`)) return;
     setCancellingId(sale.id);
     try {
-      const { error: updateError } = await supabase
-        .from('sales')
-        .update({ status: 'cancelled' })
-        .eq('id', sale.id);
-      if (updateError) throw updateError;
+      // Anulación transaccional: el RPC marca la venta y devuelve el stock
+      // con movimientos en inventory_movements. Es el único mecanismo soportado
+      // (evita el update manual + stock_movements legacy).
+      const { error: rpcError } = await supabase.rpc('cancel_sale', { p_sale_id: sale.id });
+      if (rpcError) throw rpcError;
 
-      if (sale.sale_items) {
-        for (const item of sale.sale_items) {
-          const { data: prodData } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
-          if (prodData) {
-            await supabase
-              .from('products')
-              .update({ stock_quantity: Number(prodData.stock_quantity) + Number(item.quantity) })
-              .eq('id', item.product_id);
-          }
-          await supabase.from('stock_movements').insert({
-            product_id: item.product_id,
-            type: 'adjustment',
-            quantity: item.quantity,
-            notes: `Anulación Venta #${sale.id.slice(0, 8)} (Historial)`,
-          });
-        }
-      }
       setSales((prev) => prev.map((s) => (s.id === sale.id ? { ...s, status: 'cancelled' } : s)));
-    window.dispatchEvent(new Event('dv:sale-completed'));
+      window.dispatchEvent(new Event('dv:sale-completed'));
     } catch (err: any) {
-      alert('Error al anular venta: ' + err.message);
+      alert('Error al anular venta: ' + (err?.message || err));
     } finally {
       setCancellingId(null);
     }
@@ -491,7 +550,7 @@ export function HistoryView() {
             <RoundedSelect value={sellerFilter} onChange={setSellerFilter} options={[{ value: 'all', label: 'Todos los vendedores' }, ...sellers.map((s) => ({ value: s, label: s }))]} />
           </div>
           <div className="flex-[1_1_150px] min-w-[140px]">
-            <RoundedSelect value={paymentFilter} onChange={setPaymentFilter} options={[{ value: 'all', label: 'Todos los pagos' }, { value: 'cash', label: 'Efectivo' }, { value: 'transfer', label: 'Transferencia' }, { value: 'card', label: 'Tarjeta' }]} />
+            <RoundedSelect value={paymentFilter} onChange={setPaymentFilter} options={[{ value: 'all', label: 'Todos los pagos' }, { value: 'cash', label: 'Efectivo' }, { value: 'transfer', label: 'Transferencia' }, { value: 'card', label: 'Tarjeta' }, { value: 'mercadopago', label: 'Mercado Pago' }]} />
           </div>
           <div className="flex-[1_1_150px] min-w-[140px]">
             <RoundedSelect value={typeFilter} onChange={setTypeFilter} options={[{ value: 'all', label: 'Interno + ARCA' }, { value: 'internal', label: 'Interno' }, { value: 'afip', label: 'Factura ARCA' }]} />
@@ -642,6 +701,14 @@ export function HistoryView() {
                                         <WhatsappLogo size={15} weight="bold" /> WhatsApp
                                       </button>
                                       <button
+                                        onClick={() => handleHistoryPdf(s)}
+                                        disabled={!!pdfBusyId}
+                                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition active:scale-95 whitespace-nowrap"
+                                      >
+                                        {pdfBusyId === s.id ? <SpinnerGap size={14} className="animate-spin" /> : <FilePdf size={14} weight="bold" />}
+                                        PDF
+                                      </button>
+                                      <button
                                         onClick={() => handleHistoryCopy(s)}
                                         className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition active:scale-95 whitespace-nowrap"
                                       >
@@ -655,6 +722,21 @@ export function HistoryView() {
                                       </button>
                                     </div>
                                   </div>
+                                  <label className={`flex items-center gap-2 ${myWhatsapp ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={copyToMe && !!myWhatsapp}
+                                      disabled={!myWhatsapp}
+                                      onChange={(e) => { setCopyToMe(e.target.checked); saveCopyToMe(e.target.checked); }}
+                                      className="w-3.5 h-3.5 accent-emerald-600 shrink-0"
+                                    />
+                                    <span className="text-[11px] font-bold text-slate-700">
+                                      Recibir copia en mi WhatsApp
+                                      {myWhatsapp
+                                        ? <span className="font-mono font-semibold text-slate-500"> ({myWhatsapp})</span>
+                                        : <span className="text-amber-600"> — configurá tu número en Configuración</span>}
+                                    </span>
+                                  </label>
                                   {waError
                                     ? <p className="text-[11px] font-bold text-red-600">{waError}</p>
                                     : <p className="text-[11px] text-slate-500 font-medium">Se abre WhatsApp con el ticket listo para enviar. Imprimir abre el comprobante en una ventana nueva.</p>}

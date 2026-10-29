@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, ArrowRight, ArrowLeft, Sparkles, Compass } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, Check, Sparkles, Compass } from 'lucide-react';
 import { useOnboarding } from './OnboardingProvider';
 import { guideSteps, guideTitle, type TourStep } from './guides';
-import { computeTipBox } from './tipPosition';
+import { computeTipBox, type TipPlacement } from './tipPosition';
 
-interface Rect { top: number; left: number; width: number; height: number }
+interface Rect { top: number; left: number; width: number; height: number; radius?: string }
 
 const PAD = 8;
 const TIP_WIDTH = 340;
+const CARET = 12;
+/** Borde visible del halo índigo alrededor del elemento resaltado. */
+const RING = '0 0 0 2px rgba(99,102,241,0.95), 0 0 0 7px rgba(99,102,241,0.22)';
+const SCRIM = '0 0 0 9999px rgba(2,6,23,0.68)';
+
+const CARET_BORDER: Record<TipPlacement, string> = {
+  bottom: 'border-t border-l',
+  top: 'border-b border-r',
+  right: 'border-l border-b',
+  left: 'border-t border-r',
+};
 
 function isVisible(el: Element): boolean {
   const r = el.getBoundingClientRect();
@@ -27,8 +38,22 @@ function findVisible(selector: string): Element | null {
 function readRect(selector: string): Rect | null {
   const el = findVisible(selector);
   if (!el) return null;
+  return rectOf(el);
+}
+
+function rectOf(el: Element): Rect {
   const r = el.getBoundingClientRect();
-  return { top: r.top, left: r.left, width: r.width, height: r.height };
+  return {
+    top: r.top,
+    left: r.left,
+    width: r.width,
+    height: r.height,
+    radius: window.getComputedStyle(el).borderRadius || undefined,
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 interface ProductTourProps {
@@ -44,9 +69,13 @@ interface ProductTourProps {
 export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   const { tourOpen, tourStep, activeGuide, nextStep, prevStep, endTour } = useOnboarding();
   const [rect, setRect] = useState<Rect | null>(null);
-  const [tipPos, setTipPos] = useState<{ left: number; top: number } | null>(null);
-  const [failed, setFailed] = useState(false);
-  const tipRef = useRef<HTMLDivElement | null>(null);
+  const [tipPos, setTipPos] = useState<{ left: number; top: number; side: TipPlacement } | null>(null);
+  const [tipSize, setTipSize] = useState<{ w: number; h: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 640,
+  );
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const steps = useMemo<TourStep[]>(() => {
     if (!tourOpen) return [];
@@ -54,7 +83,8 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   }, [tourOpen, activeGuide]);
 
   const step = steps[tourStep];
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const total = steps.length;
+  const isLast = tourStep === total - 1;
 
   // Navegar a la vista del paso actual.
   useEffect(() => {
@@ -85,13 +115,11 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
           timer = window.setTimeout(tick, 340);
           return;
         }
-        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-        setFailed(false);
+        setRect(rectOf(el));
         return;
       }
       tries += 1;
       if (tries > 22) {
-        setFailed(true);
         nextStep();
         return;
       }
@@ -106,20 +134,18 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   useEffect(() => {
     if (!tourOpen || !rect || isMobile) return;
     const place = () => {
-      const el = tipRef.current;
+      const el = cardRef.current;
       if (!el || !step) return;
-      const box = computeTipBox(
-        rect,
-        step.placement ?? 'bottom',
-        el.offsetWidth || TIP_WIDTH,
-        el.offsetHeight || 200,
-        window.innerWidth,
-        window.innerHeight,
+      const w = el.offsetWidth || TIP_WIDTH;
+      const h = el.offsetHeight || 200;
+      const box = computeTipBox(rect, step.placement ?? 'bottom', w, h, window.innerWidth, window.innerHeight);
+      setTipSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
+      setTipPos((prev) =>
+        prev && prev.left === box.left && prev.top === box.top && prev.side === box.side ? prev : box,
       );
-      setTipPos((prev) => (prev && prev.left === box.left && prev.top === box.top ? prev : box));
     };
     place();
-    const el = tipRef.current;
+    const el = cardRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(place);
     ro.observe(el);
@@ -127,6 +153,7 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   }, [tourOpen, rect, step, isMobile]);
 
   const measure = useCallback(() => {
+    setIsMobile(window.innerWidth < 640);
     if (step) setRect(readRect(step.selector));
   }, [step]);
 
@@ -144,6 +171,27 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
     if (tourOpen && steps.length > 0 && tourStep >= steps.length) endTour();
   }, [tourOpen, steps, tourStep, endTour]);
 
+  // Bloquear el scroll de la página mientras el recorrido está abierto.
+  useEffect(() => {
+    if (!tourOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [tourOpen]);
+
+  // Foco accesible: al abrir guardamos el foco y lo devolvemos al cerrar.
+  useEffect(() => {
+    if (!tourOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    restoreFocusRef.current = previous;
+    return () => { previous?.focus?.({ preventScroll: true }); };
+  }, [tourOpen]);
+
+  useEffect(() => {
+    if (!tourOpen) return;
+    cardRef.current?.focus({ preventScroll: true });
+  }, [tourOpen, tourStep]);
+
   // Teclado: Esc cierra, flechas navegan.
   useEffect(() => {
     if (!tourOpen) return;
@@ -158,11 +206,8 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
 
   if (!tourOpen || !step) return null;
 
-  const total = steps.length;
-  const isLast = tourStep === total - 1;
-
   const tipStyle: React.CSSProperties = isMobile
-    ? { left: '12px', right: '12px', bottom: '12px', width: 'auto' }
+    ? { left: '12px', right: '12px', bottom: 'calc(12px + env(safe-area-inset-bottom))', width: 'auto' }
     : {
         left: tipPos?.left ?? 0,
         top: tipPos?.top ?? 76,
@@ -173,78 +218,124 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   const spotlight = rect
     ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
     : null;
+  // Flecha que conecta la tarjeta con el elemento resaltado.
+  let caret: { className: string; style: React.CSSProperties } | null = null;
+  if (!isMobile && tipPos && tipSize && rect) {
+    const side = tipPos.side;
+    const targetCx = rect.left + rect.width / 2;
+    const targetCy = rect.top + rect.height / 2;
+    const edge = -CARET / 2;
+    const limitH = tipSize.w - CARET - 12;
+    const limitV = tipSize.h - CARET - 12;
+    const style: React.CSSProperties =
+      side === 'right' || side === 'left'
+        ? { top: clamp(targetCy - tipPos.top - CARET / 2, 14, limitV) }
+        : { left: clamp(targetCx - tipPos.left - CARET / 2, 14, limitH) };
+    if (side === 'right') style.left = edge;
+    if (side === 'left') style.right = edge;
+    if (side === 'bottom') style.top = edge;
+    if (side === 'top') style.bottom = edge;
+    caret = { className: CARET_BORDER[side], style };
+  }
 
-  const pct = Math.round(((tourStep + 1) / total) * 100);
   const isGlobal = activeGuide === 'inicio' || activeGuide === 'completa';
 
   return (
-    <div className="fixed inset-0 z-[300]" role="dialog" aria-modal="true" aria-label={`Recorrido: ${guideTitle(activeGuide)}`}>
+    <div
+      className="fixed inset-0 z-[300]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Recorrido: ${guideTitle(activeGuide)}`}
+      aria-labelledby="tour-step-title"
+      aria-describedby="tour-step-body"
+    >
       <div className="absolute inset-0" onClick={() => (isLast ? endTour() : nextStep())}>
         {spotlight && (
           <div
-            className="absolute rounded-2xl transition-all duration-300 pointer-events-none"
-            style={{
-              ...spotlight,
-              boxShadow:
-                '0 0 0 2px rgba(99,102,241,0.95), 0 0 0 7px rgba(99,102,241,0.22), 0 0 0 9999px rgba(2,6,23,0.74)',
-            }}
+            className="absolute pointer-events-none transition-all duration-300"
+            style={{ ...spotlight, borderRadius: rect?.radius ?? '16px', boxShadow: `${RING}, ${SCRIM}` }}
           />
         )}
       </div>
 
       <div
-        ref={tipRef}
-        className="absolute rounded-2xl bg-white dark:bg-[#1F1F1F] border border-slate-200 dark:border-[#333333] shadow-[0_20px_50px_-12px_rgba(2,6,23,0.45)] p-4 sm:p-5 animate-in fade-in-0 zoom-in-95 duration-200"
+        ref={cardRef}
+        tabIndex={-1}
+        className="tour-card absolute rounded-2xl p-4 sm:p-5 outline-none"
         style={tipStyle}
-        role="document"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-8 h-8 rounded-xl bg-brand-500/15 text-brand-600 dark:text-brand-400 grid place-items-center shrink-0">
-              {isGlobal ? <Sparkles size={15} /> : <Compass size={15} />}
-            </span>
-            <span className="min-w-0 block">
-              <span className="block text-[10px] font-extrabold uppercase tracking-widest text-brand-600 dark:text-brand-400 truncate">
-                {guideTitle(activeGuide)}
+        {caret && <span aria-hidden="true" className={`tour-caret ${caret.className}`} style={caret.style} />}
+
+        {isMobile && (
+          <div className="sm:hidden mx-auto -mt-1 mb-2.5 h-1 w-9 rounded-full bg-slate-300 dark:bg-white/20" />
+        )}
+
+        <div key={tourStep} className="tour-step-in">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-brand-500/15 text-brand-600 dark:text-brand-400 grid place-items-center shrink-0">
+                {isGlobal ? <Sparkles size={16} /> : <Compass size={16} />}
               </span>
-              <span className="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 tabular-nums">
-                Paso {tourStep + 1} de {total}
+              <span className="min-w-0 block">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-400 truncate">
+                  {guideTitle(activeGuide)}
+                </span>
+                <span className="block text-[11px] font-medium text-slate-400 dark:text-slate-500 tabular-nums">
+                  Paso {tourStep + 1} de {total}
+                </span>
               </span>
-            </span>
+            </div>
+            <button
+              type="button"
+              onClick={endTour}
+              aria-label="Cerrar recorrido"
+              className="-mr-1 -mt-1 p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer shrink-0"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={endTour}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 shrink-0 -mt-0.5 -mr-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-white/10 transition"
-            aria-label="Saltar recorrido"
+
+          <h3
+            id="tour-step-title"
+            className="text-[15px] font-semibold text-slate-900 dark:text-white mt-3.5 leading-snug tracking-[-0.01em]"
           >
-            <X size={15} />
-          </button>
+            {step.title}
+          </h3>
+          <p
+            id="tour-step-body"
+            aria-live="polite"
+            className="text-[13px] text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed"
+          >
+            {step.body}
+          </p>
         </div>
 
-        <div aria-live="polite">
-          <h3 className="text-sm font-extrabold text-slate-900 dark:text-white mt-3 leading-snug">{step.title}</h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">{step.body}</p>
-        </div>
-
-        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-white/10 mt-4 overflow-hidden">
-          <div className="h-full rounded-full bg-brand-500 transition-all duration-300" style={{ width: `${pct}%` }} />
+        {/* Progreso segmentado: un tramo por paso. */}
+        <div className="flex items-center gap-1 mt-4" aria-hidden="true">
+          {steps.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                i <= tourStep ? 'bg-brand-500' : 'bg-slate-200 dark:bg-white/10'
+              }`}
+            />
+          ))}
         </div>
 
         <div className="flex items-center justify-between gap-2 mt-4">
           <button
             type="button"
             onClick={endTour}
-            className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
+            className="px-1.5 py-1 -ml-1.5 rounded-md text-[11px] font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer"
           >
-            {failed ? 'Continuar' : 'Saltar guía'}
+            {isLast ? 'Cerrar' : 'Saltar guía'}
           </button>
           <div className="flex items-center gap-2">
             {tourStep > 0 && (
               <button
                 type="button"
                 onClick={prevStep}
-                className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-white/10 rounded-lg hover:bg-slate-200 dark:hover:bg-white/15 transition cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1"
               >
                 <ArrowLeft size={12} /> Atrás
               </button>
@@ -252,11 +343,21 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
             <button
               type="button"
               onClick={() => (isLast ? endTour() : nextStep())}
-              className="px-3.5 py-1.5 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 transition cursor-pointer flex items-center gap-1 rounded-lg shadow-sm shadow-brand-500/30"
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 transition cursor-pointer flex items-center gap-1 rounded-lg shadow-sm shadow-brand-500/25"
             >
-              {isLast ? 'Listo' : 'Siguiente'} <ArrowRight size={12} />
+              {isLast ? 'Finalizar' : 'Siguiente'}
+              {isLast ? <Check size={13} /> : <ArrowRight size={13} />}
             </button>
           </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-1.5 mt-3 text-[10px] text-slate-400 dark:text-slate-500">
+          <kbd className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 font-sans">←</kbd>
+          <kbd className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 font-sans">→</kbd>
+          <span>navegar</span>
+          <span className="mx-0.5 opacity-40">·</span>
+          <kbd className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 font-sans">Esc</kbd>
+          <span>salir</span>
         </div>
       </div>
     </div>

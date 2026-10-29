@@ -56,11 +56,12 @@ export async function getCachedProductById(id: string): Promise<any | undefined>
 }
 
 // Sales queue
-export async function enqueueSale(payload: any) {
+export async function enqueueSale(payload: any, userId?: string | null) {
   const db = await getOfflineDB();
   await db.add('sales_queue', {
     type: 'sale',
     payload,
+    user_id: userId || null,
     created_at: Date.now(),
     retries: 0,
     synced: false,
@@ -68,11 +69,12 @@ export async function enqueueSale(payload: any) {
   await updatePendingCount();
 }
 
-export async function enqueueStockAdjustment(payload: any) {
+export async function enqueueStockAdjustment(payload: any, userId?: string | null) {
   const db = await getOfflineDB();
   await db.add('sales_queue', {
     type: 'stock_adjustment',
     payload,
+    user_id: userId || null,
     created_at: Date.now(),
     retries: 0,
     synced: false,
@@ -80,11 +82,12 @@ export async function enqueueStockAdjustment(payload: any) {
   await updatePendingCount();
 }
 
-export async function enqueueProductCreate(payload: any) {
+export async function enqueueProductCreate(payload: any, userId?: string | null) {
   const db = await getOfflineDB();
   await db.add('sales_queue', {
     type: 'product_create',
     payload,
+    user_id: userId || null,
     created_at: Date.now(),
     retries: 0,
     synced: false,
@@ -92,11 +95,12 @@ export async function enqueueProductCreate(payload: any) {
   await updatePendingCount();
 }
 
-export async function enqueueProductUpdate(payload: any) {
+export async function enqueueProductUpdate(payload: any, userId?: string | null) {
   const db = await getOfflineDB();
   await db.add('sales_queue', {
     type: 'product_update',
     payload,
+    user_id: userId || null,
     created_at: Date.now(),
     retries: 0,
     synced: false,
@@ -106,15 +110,24 @@ export async function enqueueProductUpdate(payload: any) {
 
 async function updatePendingCount() {
   const db = await getOfflineDB();
+  // Ojo: el índice 'by-synced' no sirve para booleanos (IndexedDB no acepta
+  // booleanos como clave), así que se filtra en memoria. La cola es pequeña.
   const all = await db.getAll('sales_queue');
-  const count = all.filter((item: any) => !item.synced).length;
+  const count = all.filter((item: any) => !item.synced && item.failed !== true).length;
   await db.put('sync_metadata', { key: 'pending', last_sync: 0, pending_count: count });
 }
 
-export async function getPendingQueue(): Promise<any[]> {
+export async function getPendingQueue(userId?: string | null): Promise<any[]> {
   const db = await getOfflineDB();
   const all = await db.getAll('sales_queue');
-  return all.filter((item: any) => !item.synced);
+  // Los ítems en dead-letter no se reintentan en cada ciclo.
+  // Si se pasa userId, solo se procesa la cola de ese usuario (aislamiento).
+  return all.filter(
+    (item: any) =>
+      !item.synced &&
+      item.failed !== true &&
+      (userId ? item.user_id === userId : true)
+  );
 }
 
 export async function markQueueItemSynced(id: number) {
@@ -133,6 +146,44 @@ export async function incrementQueueRetries(id: number) {
   if (item) {
     item.retries += 1;
     await db.put('sales_queue', item);
+  }
+}
+
+/**
+ * Dead-letter: el item agotó sus reintentos. Se marca como fallido para que
+ * deje de consumirse en cada ciclo y quede visible para revisión manual.
+ */
+export async function markQueueItemFailed(id: number, error?: string) {
+  const db = await getOfflineDB();
+  const item = await db.get('sales_queue', id);
+  if (item) {
+    item.synced = false;
+    item.failed = true;
+    item.failed_at = Date.now();
+    item.last_error = error || 'Error desconocido';
+    await db.put('sales_queue', item);
+    await updatePendingCount();
+  }
+}
+
+/** Ítems que agotaron los reintentos (requieren intervención). */
+export async function getFailedQueue(): Promise<any[]> {
+  const db = await getOfflineDB();
+  const all = await db.getAll('sales_queue');
+  return all.filter((item: any) => item.failed === true);
+}
+
+/** Reintenta manualmente un ítem fallido. */
+export async function retryQueueItem(id: number) {
+  const db = await getOfflineDB();
+  const item = await db.get('sales_queue', id);
+  if (item) {
+    item.failed = false;
+    item.failed_at = undefined;
+    item.last_error = undefined;
+    item.retries = 0;
+    await db.put('sales_queue', item);
+    await updatePendingCount();
   }
 }
 
@@ -174,7 +225,7 @@ export async function getSetting(key: string): Promise<any> {
 export async function setLastSyncTime(time: number) {
   const db = await getOfflineDB();
   const all = await db.getAll('sales_queue');
-  const count = all.filter((item: any) => !item.synced).length;
+  const count = all.filter((item: any) => !item.synced && item.failed !== true).length;
   await db.put('sync_metadata', { key: 'last_sync', last_sync: time, pending_count: count });
 }
 

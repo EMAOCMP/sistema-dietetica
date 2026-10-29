@@ -34,11 +34,16 @@ function json(body: unknown, status = 200): Response {
 
 /**
  * Verifica la firma `x-signature` (HMAC-SHA256) de MP.
- * Si `MP_WEBHOOK_SECRET` no está configurado, no se valida (modo permisivo).
+ * Si `MP_WEBHOOK_SECRET` no está configurado, se RECHAZA (fail closed):
+ * un webhook sin firma aceptada permite finalizar ventas con solo conocer
+ * la URL.
  */
 async function verifySignature(req: Request, dataId: string): Promise<boolean> {
   const secret = Deno.env.get("MP_WEBHOOK_SECRET");
-  if (!secret) return true;
+  if (!secret) {
+    console.error("[MP] Falta el secret MP_WEBHOOK_SECRET: se rechaza la notificación.");
+    return false;
+  }
 
   const sigHeader = req.headers.get("x-signature") || "";
   const requestId = req.headers.get("x-request-id") || "";
@@ -104,9 +109,9 @@ Deno.serve(async (req: Request) => {
       return json({ ignored: true, type, paymentId });
     }
 
-    // 1.1) Validar firma del webhook (si MP_WEBHOOK_SECRET está configurado)
+    // 1.1) Validar firma del webhook (obligatoria: fail closed)
     if (!(await verifySignature(req, String(paymentId)))) {
-      console.warn("[MP webhook] firma inválida para pago", paymentId);
+      console.warn("[MP webhook] firma inválida o secret ausente para pago", paymentId);
       return json({ error: "Firma inválida" }, 401);
     }
 

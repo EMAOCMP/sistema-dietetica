@@ -5,13 +5,16 @@
 // Modos:
 //   - "test": usa MP_ACCESS_TOKEN_TEST (no cobra dinero real)
 //   - "prod": usa MP_ACCESS_TOKEN (cobros REALES)
-// El modo se resuelve: body.mode > secret MP_MODE > "test" (seguro por defecto).
+// El modo se resuelve a partir del secret MP_MODE (servidor): el cliente
+// NUNCA puede forzar producción por sí solo.
 //
 // Secrets (Dashboard → Edge Functions → mp-create-preference → Secrets):
 //   MP_ACCESS_TOKEN       = APP_USR-...        (producción)
 //   MP_ACCESS_TOKEN_TEST  = APP_USR-...        (prueba)
 //   MP_MODE               = "test" | "prod"    (opcional, default "test")
 // ============================================================
+
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -28,16 +31,43 @@ function json(body: unknown, status = 200): Response {
 
 type MpMode = "test" | "prod";
 
-/** Resuelve el modo: body.mode > secret MP_MODE > "test" (seguro por defecto). */
+/**
+ * Resuelve el modo. El secret MP_MODE es la autoridad: producción exige
+ * que el servidor esté configurado en prod Y que el cliente lo pida.
+ */
 function resolveMode(requested: unknown): MpMode {
-  if (requested === "prod" || requested === "test") return requested;
-  return Deno.env.get("MP_MODE") === "prod" ? "prod" : "test";
+  const serverMode = Deno.env.get("MP_MODE") === "prod" ? "prod" : "test";
+  if (serverMode === "prod" && requested === "prod") return "prod";
+  return "test";
+}
+
+/** Valida el JWT del usuario con el servicio de Auth. */
+async function isAuthenticated(req: Request): Promise<boolean> {
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    // Sin configuración no se puede validar: se rechaza (fail closed).
+    return false;
+  }
+  const { data, error } = await createClient(url, anonKey).auth.getUser(token);
+  return !error && !!data?.user;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
+    if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
+
+    // Requiere sesión iniciada: esta función crea cobros reales.
+    if (!(await isAuthenticated(req))) {
+      return json({ error: "Sesión inválida o expirada. Volvé a iniciar sesión." }, 401);
+    }
+
     const { title, amount, quantity = 1, external_reference, mode: requestedMode } = await req.json();
     if (!title || typeof amount !== "number" || amount <= 0) {
       return json({ error: "Se requieren title y amount > 0" }, 400);

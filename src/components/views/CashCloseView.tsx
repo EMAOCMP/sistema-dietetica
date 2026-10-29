@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
 import { Calculator, Loader2, Printer, Save, Shield } from 'lucide-react';
+import { canCloseCash } from '../../lib/permissions';
+import { fmtMoney } from '../../lib/format';
 
 interface CloseRow {
   id: string;
@@ -29,12 +31,12 @@ export function CashCloseView({ profile, showToast }: {
   const notify = (msg: string, kind: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     if (showToast) showToast(msg, kind);
   };
-  const canClose = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
+  const canClose = canCloseCash(profile?.role);
 
   const [date, setDate] = useState(todayISO());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [stats, setStats] = useState({ count: 0, total: 0, cash: 0, transfer: 0, card: 0 });
+  const [stats, setStats] = useState({ count: 0, total: 0, cash: 0, transfer: 0, card: 0, mp: 0 });
   const [counted, setCounted] = useState('');
   const [notes, setNotes] = useState('');
   const [history, setHistory] = useState<CloseRow[]>([]);
@@ -71,6 +73,7 @@ export function CashCloseView({ profile, showToast }: {
         cash: sum('cash'),
         transfer: sum('transfer'),
         card: sum('card'),
+        mp: sum('mercadopago'),
       });
       const { data: prev } = await supabase
         .from('cash_closes')
@@ -115,6 +118,7 @@ export function CashCloseView({ profile, showToast }: {
         cash_expected: stats.cash,
         transfer_total: stats.transfer,
         card_total: stats.card,
+        mp_total: stats.mp,
         cash_counted: countedNum,
         difference: diff,
         notes: notes || null,
@@ -123,7 +127,16 @@ export function CashCloseView({ profile, showToast }: {
       const { error } = await supabase
         .from('cash_closes')
         .upsert(payload, { onConflict: 'business_date' });
-      if (error) throw error;
+      if (error) {
+        // Esquema viejo: la columna mp_total puede no existir todavía.
+        const isMissingColumn = error.message?.includes('column') || error.code === '42703' || error.code === 'PGRST204';
+        if (!isMissingColumn) throw error;
+        delete payload.mp_total;
+        const { error: retryErr } = await supabase
+          .from('cash_closes')
+          .upsert(payload, { onConflict: 'business_date' });
+        if (retryErr) throw retryErr;
+      }
       notify(`Cierre del ${date} guardado. Diferencia: $${diff.toLocaleString('es-AR')}`, diff === 0 ? 'success' : 'warning');
       fetchDay();
     } catch (e: any) {
@@ -143,7 +156,7 @@ export function CashCloseView({ profile, showToast }: {
     );
   }
 
-  const money = (n: number) => `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (n: number) => fmtMoney(n);
 
   return (
     <div className="p-4 lg:p-6 space-y-4 max-w-3xl mx-auto">
@@ -178,7 +191,7 @@ export function CashCloseView({ profile, showToast }: {
               { label: 'Ventas', value: String(stats.count), mono: true },
               { label: 'Total', value: money(stats.total), mono: true },
               { label: 'Efectivo esperado', value: money(stats.cash), mono: true, hi: true },
-              { label: 'Transf. + Tarjeta', value: money(stats.transfer + stats.card), mono: true },
+              { label: 'Transf. + Tarjeta + MP', value: money(stats.transfer + stats.card + stats.mp), mono: true },
             ].map((k) => (
               <div key={k.label} className={`rounded-2xl border-2 p-3 ${k.hi ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/40' : 'border-slate-200 dark:border-[#333333] bg-white dark:bg-[#1F1F1F]'}`}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{k.label}</p>

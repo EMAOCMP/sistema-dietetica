@@ -8,6 +8,7 @@ import { ScannerModal } from '../../features/scanner/components/ScannerModal';
 import { useScanner } from '../../features/scanner/hooks/useScanner';
 import { SelectMenu } from '../ui/SelectMenu';
 import { Plus, Search, Trash2, Camera, Check, X, PackagePlus, Loader2, CalendarDays, Tag, ArrowLeftRight } from 'lucide-react';
+import { canCancelIntake, canTransferStock } from '../../lib/permissions';
 
 interface LocationRow {
   id: string;
@@ -44,7 +45,8 @@ interface ReceiptItemDetail {
 }
 
 export function StockIntakeView({ showToast, profile }: { showToast?: (msg: string, kind?: 'info' | 'success' | 'warning' | 'error') => void; profile?: Profile | null }) {
-  const canCancel = ['admin', 'supervisor', 'vendedor'].includes(profile?.role || '');
+  const canCancel = canCancelIntake(profile?.role);
+  const canTransfer = canTransferStock(profile?.role);
   const notify = (msg: string, kind: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     if (showToast) showToast(msg, kind);
   };
@@ -450,7 +452,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
         </div>
         {!activeReceipt && (
           <div className="flex gap-2 flex-wrap">
-            {canCancel && locations.length >= 2 && (
+            {canTransfer && locations.length >= 2 && (
               <button
                 onClick={() => setShowTransfer((v) => !v)}
                 className="px-4 py-2.5 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-bold transition cursor-pointer flex items-center gap-1.5"
@@ -470,7 +472,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
       </div>
 
       {/* Transferencia entre ubicaciones */}
-      {showTransfer && canCancel && locations.length >= 2 && !activeReceipt && (
+      {showTransfer && canTransfer && locations.length >= 2 && !activeReceipt && (
         <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border-2 border-sky-200 dark:border-sky-500/30 p-4 sm:p-5 space-y-3">
           <p className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <ArrowLeftRight className="text-sky-600" size={18} /> Transferir stock entre ubicaciones

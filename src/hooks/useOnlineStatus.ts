@@ -8,7 +8,9 @@ export function useOnlineStatus() {
     const updateOnline = () => {
       const online = navigator.onLine;
       setIsOnline(online);
-      if (!online) setWasOffline(true);
+      // `wasOffline` marca que HUBO una caída: se limpia al volver online
+      // para que el badge no quede pegado en "todo sincronizado".
+      setWasOffline(!online);
     };
 
     updateOnline();
