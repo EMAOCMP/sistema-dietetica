@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Product, CartItem, Profile } from '../../types';
 import { Search, ShoppingCart, Trash2, Plus, Minus, Check, Camera, Scale, Pause, X, Clock, AlertTriangle, Receipt, Printer, ArrowRight, Loader2 } from 'lucide-react';
-import { CheckCircle, WhatsappLogo, Printer as PrinterPh, Copy as CopyPh, X as XPh, FilePdf as FilePdfPh } from '@phosphor-icons/react';
+import { CheckCircle, WhatsappLogo, Printer as PrinterPh, Copy as CopyPh, X as XPh, FilePdf as FilePdfPh, Desktop as DesktopPh, SignIn as SignInPh } from '@phosphor-icons/react';
 import { RoundedSelect } from '../ui/RoundedSelect';
 import { IVA_COND_LABELS, netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
 import { nextReceiptNumber } from '../../lib/receipt';
@@ -12,7 +12,7 @@ import { useBarcodeResolution } from '../../features/scanner/hooks/useBarcodeRes
 import { ContextualTooltip } from '../../features/onboarding';
 import { resolveScaleProduct } from '../../features/scanner/services/catalogResolver';
 import { loadBusiness, loadCopyToMe, saveCopyToMe } from '../../lib/businessSettings';
-import { isValidPhone, normalizePhone, sendTicketWhatsApp } from '../../lib/whatsapp';
+import { isValidPhone, normalizeArgPhone, formatPhoneForDisplay, sendTicketWhatsApp, isMobileDevice, openWhatsAppWebLogin } from '../../lib/whatsapp';
 import { buildTicketText as buildSharedTicketText, type TicketData, type TicketItem } from '../../lib/ticketText';
 import { ticketPdfFile, downloadTicketPdf } from '../../lib/ticketPdf';
 import { shareFile } from '../../lib/share';
@@ -53,7 +53,7 @@ interface POSViewProps {
 export function POSView({ profile, showToast }: POSViewProps) {
   const [products, setProducts] = useState<Product[]>([]);
   // WhatsApp del dueño del negocio: recibe copia de cada comprobante enviado.
-  const myWhatsapp = useMemo(() => normalizePhone(loadBusiness().myWhatsapp), []);
+  const myWhatsapp = useMemo(() => normalizeArgPhone(loadBusiness().myWhatsapp), []);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -967,22 +967,22 @@ export function POSView({ profile, showToast }: POSViewProps) {
 
   const buildTicketText = (sale: any) => buildSharedTicketText(toTicketData(sale));
 
-  const handleWhatsAppSend = (phoneOverride?: string) => {
+  const handleWhatsAppSend = (phoneOverride?: string, mode: 'auto' | 'web' | 'universal' = 'auto') => {
     if (!successSale) return;
     const rawPhone = phoneOverride ?? customerPhone ?? successSale.customerPhone ?? '';
-    const cleanPhone = normalizePhone(rawPhone);
+    const cleanPhone = normalizeArgPhone(rawPhone);
 
     if (!cleanPhone) {
       setWhatsappError('Ingresá el número de WhatsApp del cliente primero.');
       return;
     }
     if (!isValidPhone(cleanPhone)) {
-      setWhatsappError(`El número "${cleanPhone}" parece incompleto. En Argentina usá 549 + área + número (Ej: 5491123456789), sin 0, sin 15, sin +.`);
+      setWhatsappError(`El número "${rawPhone}" parece incompleto. En Argentina usá 549 + área + número (Ej: 5491123456789), sin 0, sin 15, sin +.`);
       return;
     }
 
     const biz = loadBusiness();
-    const myPhone = normalizePhone(biz.myWhatsapp);
+    const myPhone = normalizeArgPhone(biz.myWhatsapp);
     const copyPhone = copyToMe && isValidPhone(myPhone) ? myPhone : '';
 
     setWhatsappError('');
@@ -991,6 +991,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
       toPhone: cleanPhone,
       text: plainText,
       copyPhone,
+      mode,
     });
 
     if (!result.customerOpened) {
@@ -1022,7 +1023,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
       if (outcome === 'downloaded') {
         notify('PDF descargado. Abrí WhatsApp y adjuntá el archivo.', 'warning');
         // Además abre el chat para que sólo falte adjuntar.
-        const cleanPhone = normalizePhone(customerPhone || successSale.customerPhone || '');
+        const cleanPhone = normalizeArgPhone(customerPhone || successSale.customerPhone || '');
         if (isValidPhone(cleanPhone)) {
           sendTicketWhatsApp({ toPhone: cleanPhone, text: buildTicketText(successSale) });
         }
@@ -2091,14 +2092,44 @@ export function POSView({ profile, showToast }: POSViewProps) {
                   <span className="text-[12px] font-semibold text-slate-700 leading-snug">
                     Recibir una copia en mi WhatsApp
                     {myWhatsapp
-                      ? <span className="font-mono text-slate-500"> ({myWhatsapp})</span>
+                      ? <span className="font-mono text-slate-500"> ({formatPhoneForDisplay(myWhatsapp)})</span>
                       : <span className="text-amber-600"> — configurá tu número en Configuración</span>}
                   </span>
                 </label>
 
+                {/* Número destino real (normalizado) */}
+                {customerPhone.trim() && isValidPhone(customerPhone) && (
+                  <p className="text-[12px] font-semibold text-slate-600">
+                    Se va a enviar a <span className="font-mono font-bold text-emerald-700">{formatPhoneForDisplay(customerPhone)}</span>
+                  </p>
+                )}
+
+                {!isMobileDevice() && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      onClick={() => handleWhatsAppSend(undefined, 'universal')}
+                      className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer text-left flex items-center gap-1"
+                    >
+                      <DesktopPh size={12} /> ¿Tenés WhatsApp Desktop? Abrir la app
+                    </button>
+                    <button
+                      onClick={openWhatsAppWebLogin}
+                      className="text-[11px] font-bold text-slate-500 hover:underline cursor-pointer text-left flex items-center gap-1"
+                    >
+                      <SignInPh size={12} /> Iniciar sesión en WhatsApp Web
+                    </button>
+                  </div>
+                )}
+
                 {whatsappError
                   ? <p className="text-[12px] font-semibold text-red-600">{whatsappError}</p>
-                  : <p className="text-[12px] text-slate-500 font-medium">Formato: 549 + área + número, sin 0, sin 15, sin +. Se abre WhatsApp y vos confirmás.</p>}
+                  : (
+                    <p className="text-[12px] text-slate-500 font-medium">
+                      {isMobileDevice()
+                        ? 'Formato: 549 + área + número, sin 0, sin 15, sin +. Se abre WhatsApp y vos confirmás.'
+                        : 'En la PC se abre WhatsApp Web: la primera vez tenés que iniciar sesión (web.whatsapp.com). Podés pegar el ticket con "Copiar texto".'}
+                    </p>
+                  )}
                 <button
                   onClick={handleCopyTicket}
                   className="w-full py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition"

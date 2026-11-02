@@ -12,12 +12,14 @@ import {
   Copy,
   FilePdf,
   SpinnerGap,
+  Desktop,
+  SignIn,
 } from '@phosphor-icons/react';
 import { RoundedSelect } from '../ui/RoundedSelect';
 // Exportaciones: xlsx dinámico (ver botones Exportar / Para contador)
 import { netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
 import { loadBusiness, loadCopyToMe, saveCopyToMe } from '../../lib/businessSettings';
-import { isValidPhone, normalizePhone, sendTicketWhatsApp } from '../../lib/whatsapp';
+import { isValidPhone, normalizeArgPhone, formatPhoneForDisplay, sendTicketWhatsApp, isMobileDevice, openWhatsAppWebLogin } from '../../lib/whatsapp';
 import { buildTicketText, type TicketData } from '../../lib/ticketText';
 import { ticketPdfFile, downloadTicketPdf } from '../../lib/ticketPdf';
 import { shareFile } from '../../lib/share';
@@ -79,7 +81,7 @@ export function HistoryView() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   // Copia de cada comprobante reenviado al WhatsApp del dueño del negocio.
-  const myWhatsapp = useMemo(() => normalizePhone(loadBusiness().myWhatsapp), []);
+  const myWhatsapp = useMemo(() => normalizeArgPhone(loadBusiness().myWhatsapp), []);
   const [copyToMe, setCopyToMe] = useState(() => loadCopyToMe());
 
   useEffect(() => {
@@ -226,8 +228,8 @@ export function HistoryView() {
 
   const buildHistoryTicketText = (sale: SaleRecord) => buildTicketText(toTicketData(sale));
 
-  const handleHistoryWhatsApp = (sale: SaleRecord) => {
-    const cleanPhone = normalizePhone(historyPhone);
+  const handleHistoryWhatsApp = (sale: SaleRecord, mode: 'auto' | 'web' | 'universal' = 'auto') => {
+    const cleanPhone = normalizeArgPhone(historyPhone);
     if (!cleanPhone) {
       setWaError('Ingresá el número de WhatsApp (Ej: 5491123456789).');
       return;
@@ -237,7 +239,7 @@ export function HistoryView() {
       return;
     }
 
-    const myPhone = normalizePhone(loadBusiness().myWhatsapp);
+    const myPhone = normalizeArgPhone(loadBusiness().myWhatsapp);
     const copyPhone = copyToMe && isValidPhone(myPhone) ? myPhone : '';
 
     setWaError('');
@@ -245,6 +247,7 @@ export function HistoryView() {
       toPhone: cleanPhone,
       text: buildHistoryTicketText(sale),
       copyPhone,
+      mode,
     });
 
     if (!result.customerOpened) {
@@ -274,7 +277,7 @@ export function HistoryView() {
 
       if (outcome === 'downloaded') {
         setWaError('PDF descargado. Abrí WhatsApp y adjuntá el archivo.');
-        const cleanPhone = normalizePhone(historyPhone);
+        const cleanPhone = normalizeArgPhone(historyPhone);
         if (isValidPhone(cleanPhone)) {
           sendTicketWhatsApp({ toPhone: cleanPhone, text: buildHistoryTicketText(sale) });
         }
@@ -722,6 +725,28 @@ export function HistoryView() {
                                       </button>
                                     </div>
                                   </div>
+                                  {/* Número destino real (normalizado) */}
+                                  {historyPhone.trim() && isValidPhone(historyPhone) && (
+                                    <p className="text-[11px] font-semibold text-slate-600">
+                                      Se va a enviar a <span className="font-mono font-bold text-emerald-700">{formatPhoneForDisplay(historyPhone)}</span>
+                                    </p>
+                                  )}
+                                  {!isMobileDevice() && (
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                      <button
+                                        onClick={() => handleHistoryWhatsApp(s, 'universal')}
+                                        className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                      >
+                                        <Desktop size={12} /> ¿Tenés WhatsApp Desktop? Abrir la app
+                                      </button>
+                                      <button
+                                        onClick={openWhatsAppWebLogin}
+                                        className="text-[11px] font-bold text-slate-500 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                      >
+                                        <SignIn size={12} /> Iniciar sesión en WhatsApp Web
+                                      </button>
+                                    </div>
+                                  )}
                                   <label className={`flex items-center gap-2 ${myWhatsapp ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
                                     <input
                                       type="checkbox"
@@ -739,7 +764,13 @@ export function HistoryView() {
                                   </label>
                                   {waError
                                     ? <p className="text-[11px] font-bold text-red-600">{waError}</p>
-                                    : <p className="text-[11px] text-slate-500 font-medium">Se abre WhatsApp con el ticket listo para enviar. Imprimir abre el comprobante en una ventana nueva.</p>}
+                                    : (
+                                      <p className="text-[11px] text-slate-500 font-medium">
+                                        {isMobileDevice()
+                                          ? 'Se abre WhatsApp con el ticket listo para enviar.'
+                                          : 'En la PC se abre WhatsApp Web: la primera vez tenés que iniciar sesión (web.whatsapp.com). Podés pegar el ticket con "Copiar" si preferís.'}
+                                      </p>
+                                    )}
                                 </div>
                                 <p className="text-[11px] text-slate-400">El stock se descontó al cobrar y se restituye automáticamente al anular. Descuento/Envío de tickets viejos no quedaban guardados; desde ahora el total ya los incluye.</p>
                               </div>
