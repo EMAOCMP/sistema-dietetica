@@ -9,7 +9,7 @@
 -- ============================================
 
 -- 1) Tablas faltantes (esperado: 0 filas)
-SELECT 'FALLA · tabla' AS estado, 'Tabla ' || x.n AS chequeo
+SELECT 'FALLA · tabla' AS estado, 'Tabla ' || x AS chequeo
 FROM (VALUES
   ('products'),('sales'),('sale_items'),('profiles'),('customers'),('suppliers'),
   ('locations'),('inventory'),('inventory_movements'),('stock_movements'),
@@ -19,10 +19,10 @@ FROM (VALUES
   ('categories'),('units'),('payment_methods'),('dispatch_types'),('iva_conditions'),
   ('purchase_orders'),('purchase_order_items'),('audit_logs')
 ) v(x)
-WHERE to_regclass('public.' || x.n) IS NULL;
+WHERE to_regclass('public.' || x) IS NULL;
 
 -- 2) RPCs faltantes (esperado: 0 filas)
-SELECT 'FALLA · rpc' AS estado, 'RPC ' || x.n AS chequeo
+SELECT 'FALLA · rpc' AS estado, 'RPC ' || x AS chequeo
 FROM (VALUES
   ('user_role'),('create_sale'),('cancel_sale'),('adjust_stock'),('add_stock'),
   ('confirm_stock_receipt'),('transfer_stock'),('next_stock_receipt_number'),
@@ -32,11 +32,11 @@ FROM (VALUES
 WHERE NOT EXISTS (
   SELECT 1 FROM pg_proc p
   JOIN pg_namespace ns ON ns.oid = p.pronamespace
-  WHERE ns.nspname = 'public' AND p.proname = x.n
+  WHERE ns.nspname = 'public' AND p.proname = x
 );
 
 -- 3) Columnas faltantes (esperado: 0 filas)
-SELECT 'FALLA · columna' AS estado, x.t || '.' || x.c AS chequeo
+SELECT 'FALLA · columna' AS estado, tbl || '.' || col AS chequeo
 FROM (VALUES
   ('cash_closes','mp_total'),('cash_closes','cash_expected'),('cash_closes','card_total'),
   ('sales','receipt_number'),('sales','idempotency_key'),('sales','discount_amount'),
@@ -50,22 +50,22 @@ FROM (VALUES
   ('sale_items','discount_amount'),('sale_items','cost_price_at_sale'),
   ('product_barcodes','barcode_normalized'),('product_barcodes','active'),
   ('inventory','quantity'),('inventory_movements','type'),('expenses','spent_on')
-) v(t, c)
+) v(tbl, col)
 WHERE NOT EXISTS (
   SELECT 1 FROM information_schema.columns
   WHERE table_schema = 'public'
-    AND table_name::text = x.t
-    AND column_name::text = x.c
+    AND table_name::text = tbl
+    AND column_name::text = col
 );
 
 -- 4) Triggers faltantes (esperado: 0 filas)
-SELECT 'FALLA · trigger' AS estado, 'Trigger ' || x.n AS chequeo
+SELECT 'FALLA · trigger' AS estado, 'Trigger ' || x AS chequeo
 FROM (VALUES
   ('trg_audit_sales'),('trg_audit_products'),('trg_barcode_normalized'),
   ('trg_inventory_sync_product'),('trg_stock_sale'),
   ('trg_products_updated'),('trg_customers_updated')
 ) v(x)
-WHERE NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = x.n AND NOT tgisinternal);
+WHERE NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = x AND NOT tgisinternal);
 
 -- 5) Tablas objetivo sin RLS (esperado: 0 filas)
 SELECT 'FALLA · RLS' AS estado, 'Tabla sin RLS: ' || c.relname AS chequeo

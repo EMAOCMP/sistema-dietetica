@@ -105,6 +105,19 @@ CREATE TRIGGER trg_audit_products
   AFTER INSERT OR UPDATE OR DELETE ON products
   FOR EACH ROW EXECUTE FUNCTION audit_trigger();
 
+-- trg_customers_updated: faltaba (el updated_at de clientes no se actualizaba solo).
+-- Requiere la función update_updated_at() de schema_improvements.sql.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+              WHERE ns.nspname = 'public' AND p.proname = 'update_updated_at')
+     AND to_regclass('public.customers') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS trg_customers_updated ON customers;
+    CREATE TRIGGER trg_customers_updated BEFORE UPDATE ON customers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+END $$;
+
 -- ------------------------------------------------------------
 -- 4) product_price_history (la usa ProductsView, no existía)
 -- ------------------------------------------------------------
