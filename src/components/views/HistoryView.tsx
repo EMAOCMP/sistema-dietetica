@@ -606,7 +606,7 @@ export function HistoryView() {
                     <th className="p-4">Pago / Despacho</th>
                     <th className="p-4">Tipo / Estado</th>
                     <th className="p-4 text-right">Total</th>
-                    <th className="p-4 text-right">Acciones</th>
+                    <th className="p-4 text-right sticky right-0 z-10 bg-slate-50 dark:bg-[#1A1A1A] shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)]">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
@@ -618,13 +618,13 @@ export function HistoryView() {
                         <tr
                           onClick={() => setExpandedId(expanded ? null : s.id)}
                           style={{ animationDelay: `${Math.min(rowIdx, 10) * 30}ms` }}
-                          className={`animate-row hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:shadow-[inset_3px_0_0_#0ea5e9] transition-all cursor-pointer ${st === 'cancelled' ? 'opacity-60' : ''} ${expanded ? 'bg-sky-50 dark:bg-sky-500/10' : ''}`}
+                          className={`group animate-row hover:bg-sky-50 dark:hover:bg-sky-500/10 hover:shadow-[inset_3px_0_0_#0ea5e9] transition-all cursor-pointer ${st === 'cancelled' ? 'opacity-60' : ''} ${expanded ? 'bg-sky-50 dark:bg-sky-500/10' : ''}`}
                         >
                           <td className="p-4">
                             <span className="font-bold text-slate-800 tnum">{s.receipt_number ? `N° ${s.receipt_number}` : `#${s.id.slice(0, 8).toUpperCase()}`}</span>
                             <span className="block text-xs text-slate-400 font-medium tnum">{new Date(s.created_at).toLocaleString('es-AR')}</span>
                           </td>
-                          <td className="p-4 font-bold text-slate-900">{s.customer_name}</td>
+                          <td className="p-4 font-bold text-slate-900 max-w-[220px] truncate">{s.customer_name}</td>
                           <td className="p-4 text-slate-600 font-medium">{s.profiles?.full_name || 'Vendedor'}</td>
                           <td className="p-4">
                             <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 uppercase mr-1">{paymentLabel(s.payment_method)}</span>
@@ -639,7 +639,7 @@ export function HistoryView() {
                             </span>
                           </td>
                           <td className="p-4 text-right font-extrabold text-emerald-700 tnum">${Number(s.total_amount).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <td className="p-4 text-right whitespace-nowrap sticky right-0 z-10 bg-white dark:bg-[#18181B] shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)] group-hover:bg-sky-50 dark:group-hover:bg-sky-500/10" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => setExpandedId(expanded ? null : s.id)}
                               title="Ver detalle"

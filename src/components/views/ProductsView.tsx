@@ -1645,10 +1645,10 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                                <ImagePlus size={18} />
                              </span>
                            )}
-                           <span className="min-w-0">
-                             {highlightMatch(p.name, searchTerm)}
-                             <span className="block text-xs font-semibold text-slate-500 uppercase">Unidad: {p.unit_type}</span>
-                           </span>
+                            <span className="min-w-0">
+                              <span className="block max-w-[190px] truncate">{highlightMatch(p.name, searchTerm)}</span>
+                              <span className="block text-xs font-semibold text-slate-500 uppercase">Unidad: {p.unit_type}</span>
+                            </span>
                          </div>
                        </td>
                        <td className={`${pad} font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap border-r border-slate-100 dark:border-[#333333]`}>{highlightMatch(p.category || 'General', searchTerm)}</td>

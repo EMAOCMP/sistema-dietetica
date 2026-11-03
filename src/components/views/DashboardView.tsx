@@ -1801,12 +1801,12 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
                         <th className="p-4 whitespace-nowrap text-center">Stock</th>
                         <th className="p-4 whitespace-nowrap">Sugerido</th>
                         <th className="p-4 whitespace-nowrap">Costo est.</th>
-                        <th className="p-4 whitespace-nowrap text-right">Pedido</th>
+                        <th className="p-4 whitespace-nowrap text-right sticky right-0 z-10 bg-slate-50/70 dark:bg-white/5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)]">Pedido</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#333333] text-sm text-slate-700 dark:text-slate-300">
                       {rows.map(({ p, sug, ordered, empty, cost }) => (
-                        <tr key={p.id} className={`hover:bg-slate-50/50 dark:hover:bg-white/5 transition ${ordered ? 'opacity-60' : ''}`}>
+                        <tr key={p.id} className={`group hover:bg-slate-50/50 dark:hover:bg-white/5 transition ${ordered ? 'opacity-60' : ''}`}>
                           <td className="p-4 whitespace-nowrap">
                             <span className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${empty ? 'bg-red-500' : 'bg-amber-500'}`} />
@@ -1824,7 +1824,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
                           <td className={`p-4 font-bold tnum whitespace-nowrap text-center ${empty ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>{p.stock_quantity}</td>
                           <td className="p-4 font-extrabold text-emerald-700 dark:text-emerald-400 tnum whitespace-nowrap">+{sug} {p.unit_type}</td>
                           <td className="p-4 font-bold text-slate-800 dark:text-white tnum whitespace-nowrap">${cost.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right whitespace-nowrap">
+                          <td className="p-4 text-right whitespace-nowrap sticky right-0 z-10 bg-white dark:bg-[#1F1F1F] shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)] group-hover:bg-slate-50/50 dark:group-hover:bg-white/5">
                             <button
                               onClick={() => toggleOrdered(p.id)}
                               title={ordered ? 'Quitar de pedidos' : 'Marcar como pedido al proveedor'}

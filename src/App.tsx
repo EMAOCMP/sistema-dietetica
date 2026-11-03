@@ -365,7 +365,7 @@ export function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative pb-[76px] lg:pb-0">
+        <main className="flex-1 overflow-y-auto relative pb-[76px] lg:pb-24">
           <div key={activeTab} className="view-fade min-h-full">
             {activeTab === 'dashboard' && <DashboardView setActiveTab={setActiveTab} profile={profile} showToast={showToast} />}
             {activeTab === 'products' && (
