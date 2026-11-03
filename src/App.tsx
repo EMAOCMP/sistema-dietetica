@@ -413,14 +413,16 @@ export function App() {
         </main>
       </div>
 
-      {/* Floating Action Button */}
-      <button
-        onClick={() => { goTo('products'); showToast('Nuevo Producto / Stock'); }}
-        className="fixed bottom-24 lg:bottom-6 right-4 lg:right-6 w-14 h-14 bg-brand-600 hover:bg-brand-500 text-white rounded-full shadow-glow-brand flex items-center justify-center transition-transform hover:scale-110 active:scale-95 z-40 cursor-pointer"
-        title="Nueva acción (+)"
-      >
-        <Plus size={22} />
-      </button>
+      {/* Floating Action Button — oculto en Productos para no tapar la columna Acciones */}
+      {activeTab !== 'products' && (
+        <button
+          onClick={() => { goTo('products'); showToast('Nuevo Producto / Stock'); }}
+          className="fixed bottom-24 lg:bottom-6 right-4 lg:right-6 w-14 h-14 bg-brand-600 hover:bg-brand-500 text-white rounded-full shadow-glow-brand flex items-center justify-center transition-transform hover:scale-110 active:scale-95 z-40 cursor-pointer"
+          title="Nueva acción (+)"
+        >
+          <Plus size={22} />
+        </button>
+      )}
 
       {/* Mobile bottom navigation */}
       <MobileTabBar profile={profile} activeTab={activeTab} setActiveTab={goTo} />

@@ -1597,7 +1597,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               {(() => {
-                const cellPad = density === 'compact' ? 'p-2' : 'p-4';
+                const cellPad = density === 'compact' ? 'p-2' : 'px-2 py-3';
                  const SortTh = ({ id, label, align='left' }: { id: string; label: string; align?: string }) => {
                    const active = sortBy === id;
                    return (
@@ -1617,18 +1617,18 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                         <SortTh id="stock" label="Stock" align="center" />
                         <SortTh id="expiry" label="Vence" align="center" />
                         <SortTh id="rotation" label="Rotación" align="center" />
-                        <th className={`${cellPad} text-center`}>Acciones</th>
+                        <th className={`${cellPad} text-center sticky right-0 z-10 bg-white dark:bg-[#232323] shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)]`}>Acciones</th>
                       </tr>
                    </thead>
                 );
               })()}
                <tbody className="divide-y divide-slate-200 dark:divide-[#333333] text-sm text-slate-700 dark:text-slate-300">
                  {filteredProducts.map((p) => {
-                   const pad = density === 'compact' ? 'p-2' : 'p-3';
+                    const pad = density === 'compact' ? 'p-2' : 'px-2 py-2.5';
                    const isExpanded = expandedId === p.id;
                    return (
                      <React.Fragment key={p.id}>
-                      <tr key={p.id} onClick={()=> setExpandedId(isExpanded? null: p.id)} className={`hover:bg-slate-50 dark:hover:bg-[#2a2a2a] transition cursor-pointer border-b border-slate-100 dark:border-[#2a2a2a] ${selectedIds.has(p.id)? 'bg-sky-100 dark:bg-sky-900/30':''} ${isExpanded? 'bg-slate-100 dark:bg-[#252525]':''}`}>
+                       <tr key={p.id} onClick={()=> setExpandedId(isExpanded? null: p.id)} className={`group hover:bg-slate-50 dark:hover:bg-[#2a2a2a] transition cursor-pointer border-b border-slate-100 dark:border-[#2a2a2a] ${selectedIds.has(p.id)? 'bg-sky-100 dark:bg-sky-900/30':''} ${isExpanded? 'bg-slate-100 dark:bg-[#252525]':''}`}>
                        <td className={`${pad} w-8 border-r border-slate-100 dark:border-[#333333]`} onClick={(e)=> e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(p.id)} onChange={(e)=> { const ns=new Set(selectedIds); if(e.target.checked) ns.add(p.id); else ns.delete(p.id); setSelectedIds(ns); }} className="accent-sky-500" /></td>
                        <td className={`${pad} font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap border-r border-slate-100 dark:border-[#333333]`}>
                          <span className="flex items-center gap-1.5">
@@ -1701,7 +1701,16 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                            );
                          })()}
                        </td>
-                       <td className={`${pad} text-center whitespace-nowrap`} onClick={(e)=> e.stopPropagation()}>
+                        <td
+                          className={`${pad} text-center whitespace-nowrap sticky right-0 z-10 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)] ${
+                            selectedIds.has(p.id)
+                              ? 'bg-sky-100 dark:bg-sky-900/30'
+                              : isExpanded
+                                ? 'bg-slate-100 dark:bg-[#252525]'
+                                : 'bg-white dark:bg-[#1F1F1F]'
+                          } group-hover:bg-slate-50 dark:group-hover:bg-[#2a2a2a]`}
+                          onClick={(e)=> e.stopPropagation()}
+                        >
 {showInactive ? (
                             canManage ? (
                               <button
