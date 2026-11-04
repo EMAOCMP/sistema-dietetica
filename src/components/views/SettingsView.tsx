@@ -48,6 +48,16 @@ export function SettingsView({ currentUser, showToast }: {
   const [metaOpen, setMetaOpen] = useState(() => loadMetaSchedule().open);
   const [metaClose, setMetaClose] = useState(() => loadMetaSchedule().close);
   const [mpTesting, setMpTesting] = useState(false);
+  const [pointTerminals, setPointTerminals] = useState<any[]>([]);
+  const [pointLoading, setPointLoading] = useState(false);
+  const [pointSaving, setPointSaving] = useState(false);
+  const [pointTestingCfg, setPointTestingCfg] = useState(false);
+  const [pointConfig, setPointConfig] = useState<{
+    terminal_id: string;
+    label: string;
+    print_on_terminal: string;
+    default_payment_method: string | null;
+  }>({ terminal_id: '', label: '', print_on_terminal: 'seller_ticket', default_payment_method: null });
   const [backingUp, setBackingUp] = useState<string | null>(null);
   const [locations, setLocations] = useState<LocationRow[]>([]);
   const [loadingLoc, setLoadingLoc] = useState(true);
@@ -57,7 +67,124 @@ export function SettingsView({ currentUser, showToast }: {
 
   useEffect(() => {
     fetchLocations();
+    loadPointConfig();
   }, []);
+
+  // ---------- Terminal Mercado Pago POINT ----------
+  const loadPointConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('mp_point_config')
+        .select('*')
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        // La tabla puede no existir todavia (falta correr mp_point_config.sql)
+        return;
+      }
+      if (data) {
+        setPointConfig({
+          terminal_id: data.terminal_id || '',
+          label: data.label || '',
+          print_on_terminal: data.print_on_terminal || 'seller_ticket',
+          default_payment_method: data.default_payment_method || null,
+        });
+      }
+    } catch { /* sin config */ }
+  };
+
+  const handleLoadPointTerminals = async () => {
+    setPointLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('mp-point-order', {
+        body: { p_action: 'list', p_mode: mpSettings.mpMode || 'test' },
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (res?.error) {
+        notify(`No se pudieron listar las terminales: ${res.error}`, 'error');
+        return;
+      }
+      const list = res?.terminals || [];
+      setPointTerminals(list);
+      notify(list.length
+        ? `${list.length} terminal(es) encontrada(s).`
+        : 'No hay terminales vinculadas a la cuenta.', list.length ? 'success' : 'warning');
+    } catch (e: any) {
+      notify(`Error: ${e?.message || e}`, 'error');
+    } finally {
+      setPointLoading(false);
+    }
+  };
+
+  const handleSavePointConfig = async () => {
+    if (!pointConfig.terminal_id) {
+      notify('Falta el Terminal ID', 'warning');
+      return;
+    }
+    setPointSaving(true);
+    try {
+      // Desactivar la anterior para que solo quede una activa.
+      await supabase.from('mp_point_config').update({ active: false }).eq('active', true);
+      const { data: existing } = await supabase
+        .from('mp_point_config')
+        .select('id')
+        .eq('terminal_id', pointConfig.terminal_id)
+        .maybeSingle();
+
+      const payload = {
+        terminal_id: pointConfig.terminal_id,
+        label: pointConfig.label || null,
+        print_on_terminal: pointConfig.print_on_terminal || 'seller_ticket',
+        default_payment_method: pointConfig.default_payment_method || null,
+        active: true,
+      };
+
+      if (existing) {
+        const { error } = await supabase.from('mp_point_config').update(payload).eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('mp_point_config').insert(payload);
+        if (error) throw error;
+      }
+      notify('Terminal Point guardada.', 'success');
+    } catch (e: any) {
+      notify(`Error al guardar: ${e?.message || e}`, 'error');
+    } finally {
+      setPointSaving(false);
+    }
+  };
+
+  const handleTestPointConfig = async () => {
+    setPointTestingCfg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('mp-point-order', {
+        body: {
+          p_action: 'list',
+          p_mode: mpSettings.mpMode || 'test',
+          terminal_id: pointConfig.terminal_id,
+        },
+      });
+      if (error) throw error;
+      const res = data as any;
+      if (res?.error) {
+        notify(`Error de MP: ${res.error}`, 'error');
+        return;
+      }
+      const list = res?.terminals || [];
+      const found = list.find((t: any) => (t.id || t.terminal_id) === pointConfig.terminal_id);
+      if (found) {
+        notify(`Terminal OK (modo ${found.operating_mode || 'desconocido'}).`, 'success');
+      } else {
+        notify('La Edge Function responde, pero esa terminal no aparece en la lista.', 'warning');
+      }
+    } catch (e: any) {
+      notify(`Error: ${e?.message || e}`, 'error');
+    } finally {
+      setPointTestingCfg(false);
+    }
+  };
 
   const fetchLocations = async () => {
     setLoadingLoc(true);
@@ -393,6 +520,122 @@ export function SettingsView({ currentUser, showToast }: {
             {mpTesting ? <Loader2 size={16} className="animate-spin" /> : null} Probar conexión (Edge Function)
           </button>
         </div>
+      </div>
+
+      {/* Terminal Mercado Pago POINT */}
+      <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 sm:p-5 space-y-3">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+          <span>📟 Terminal Point (Point Smart)</span>
+        </p>
+        <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
+          Conecta una terminal <b>Mercado Pago Point</b> para que el cliente pague en el mostrador. Al cobrar, el
+          POS manda la <i>order</i> a la terminal (Edge Function <code>mp-point-order</code>) y la venta queda
+          pendiente hasta que Mercado Pago la apruebe.
+        </p>
+
+        {!canEditLocations ? (
+          <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            Solo los administradores pueden configurar la terminal.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={handleLoadPointTerminals} disabled={pointLoading}
+                className="px-4 py-2.5 bg-white border-2 border-violet-500 text-violet-600 hover:bg-violet-50 rounded-xl text-sm font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
+                {pointLoading ? <Loader2 size={16} className="animate-spin" /> : null} Buscar terminales
+              </button>
+            </div>
+
+            {pointTerminals.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Terminales disponibles</p>
+                {pointTerminals.map((t: any) => (
+                  <label key={t.id || t.terminal_id}
+                    className="flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-[#232323] rounded-xl border border-slate-100 dark:border-[#333333] cursor-pointer">
+                    <input type="radio" name="point-terminal"
+                      checked={pointConfig.terminal_id === (t.id || t.terminal_id)}
+                      onChange={() => setPointConfig({
+                        ...pointConfig,
+                        terminal_id: t.id || t.terminal_id,
+                        label: t.label || t.id || t.terminal_id,
+                      })} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-slate-800 dark:text-white truncate">
+                        {t.label || t.id || t.terminal_id}
+                      </span>
+                      <span className="block text-[10px] font-mono text-slate-400 truncate">
+                        {t.id || t.terminal_id}
+                        {t.operating_mode ? ` · modo ${t.operating_mode}` : ''}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-[11px] font-bold text-slate-500">Terminal ID (manual)
+                <input value={pointConfig.terminal_id}
+                  onChange={(e) => setPointConfig({ ...pointConfig, terminal_id: e.target.value.trim() })}
+                  placeholder="NEWLAND_N950__N950NCB801293324"
+                  className="mt-0.5 w-full px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-mono font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </label>
+              <label className="text-[11px] font-bold text-slate-500">Nombre (opcional)
+                <input value={pointConfig.label || ''}
+                  onChange={(e) => setPointConfig({ ...pointConfig, label: e.target.value })}
+                  placeholder="Point Smart mostrador"
+                  className="mt-0.5 w-full px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-sm font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </label>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-[11px] font-bold text-slate-500">Impresión del ticket
+                <SelectMenu
+                  value={pointConfig.print_on_terminal}
+                  options={[{ value: 'seller_ticket', label: 'La terminal imprime' }, { value: 'no_ticket', label: 'No imprimir' }]}
+                  onChange={(v) => setPointConfig({ ...pointConfig, print_on_terminal: String(v) })}
+                  ariaLabel="Impresión del ticket"
+                  fullWidth
+                />
+              </label>
+              <label className="text-[11px] font-bold text-slate-500">Método de pago en la terminal
+                <SelectMenu
+                  value={pointConfig.default_payment_method || 'any'}
+                  options={[
+                    { value: 'any', label: 'El cliente elige' },
+                    { value: 'credit_card', label: 'Solo crédito' },
+                    { value: 'debit_card', label: 'Solo débito' },
+                    { value: 'qr', label: 'Solo QR' },
+                  ]}
+                  onChange={(v) => setPointConfig({
+                    ...pointConfig,
+                    default_payment_method: String(v) === 'any' ? null : String(v),
+                  })}
+                  ariaLabel="Método de pago en la terminal"
+                  fullWidth
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button onClick={handleSavePointConfig} disabled={pointSaving || !pointConfig.terminal_id}
+                className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-40">
+                {pointSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar terminal
+              </button>
+              {pointConfig.terminal_id && (
+                <button onClick={handleTestPointConfig} disabled={pointTestingCfg}
+                  className="px-4 py-2.5 bg-white border-2 border-violet-500 text-violet-600 hover:bg-violet-50 rounded-xl text-sm font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
+                  {pointTestingCfg ? <Loader2 size={16} className="animate-spin" /> : null} Probar conexión
+                </button>
+              )}
+            </div>
+
+            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+              Para que funcione, la terminal debe estar vinculada a tu cuenta de Mercado Pago, asociada a una caja
+              y en modo <b>PDV</b>. En el POS elegí el método de pago <b>MP Terminal 📟</b>.
+            </p>
+          </>
+        )}
       </div>
 
       {/* Respaldo */}

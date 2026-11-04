@@ -51,6 +51,36 @@ function mpTokens(): string[] {
   ].filter(Boolean) as string[];
 }
 
+/**
+ * Estado de una ORDER de Mercado Pago POINT.
+ * La order trae el external_reference y el pago dentro de transactions.
+ */
+async function getOrderStatus(orderId: string): Promise<any | null> {
+  for (const token of mpTokens()) {
+    try {
+      const resp = await fetch(
+        `https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!resp.ok) continue;
+      const order = await resp.json();
+      const payment = order?.transactions?.payments?.[0] ?? null;
+      return {
+        id: order?.id ?? orderId,
+        external_reference: order?.external_reference ?? null,
+        // La order usa processed/failed/canceled; el pago usa approved/rejected.
+        status: order?.status ?? null,
+        status_detail: order?.status_detail ?? null,
+        payment_id: payment?.id ?? null,
+        payment_status: payment?.status ?? null,
+        payment_reference: payment?.reference?.id ?? null,
+        isOrder: true,
+      };
+    } catch { /* probamos con el siguiente token */ }
+  }
+  return null;
+}
+
 /** Busca el pago en MP por external_reference. */
 async function findPaymentByExternalRef(
   externalRef: string,
@@ -122,7 +152,7 @@ Deno.serve(async (req: Request) => {
     // 1) Leer la venta
     const { data: sale, error: saleErr } = await admin
       .from("sales")
-      .select("id, status, mp_external_ref, mp_preference_id, mp_payment_id")
+      .select("id, status, mp_external_ref, mp_preference_id, mp_payment_id, mp_order_id")
       .eq("id", saleId)
       .maybeSingle();
     if (saleErr) return json({ error: saleErr.message }, 500);
@@ -141,11 +171,13 @@ Deno.serve(async (req: Request) => {
       return json({ error: "La venta no tiene mp_external_ref" }, 400);
     }
 
-    // 3) Consultar el pago real en MP
-    const payment = await findPaymentByExternalRef(
-      externalRef,
-      sale.mp_preference_id ?? null,
-    );
+    // 3) Consultar el pago real en MP.
+    //    Si la venta tiene order de Point, se consulta la order; si no, el pago.
+    const orderId: string | null = sale.mp_order_id ?? null;
+    const payment = orderId
+      ? await getOrderStatus(orderId)
+      : await findPaymentByExternalRef(externalRef, sale.mp_preference_id ?? null);
+
     if (!payment) {
       return json({
         ok: false,
@@ -156,43 +188,54 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Estados de order: processed | failed | canceled | action_required | expired
+    // Estados de pago: approved | rejected | cancelled | pending
     const mpStatus: string = payment.status || "pending";
+    const isOrder = payment.isOrder === true;
+    const paymentId = payment.payment_id ?? payment.id;
+    const mpAuth = payment.authorization_code ?? payment.payment_reference ?? payment.id;
 
     // 4) Conciliar siempre el id del pago
-    const mpAuth = payment.authorization_code || payment.id;
     await admin
       .from("sales")
       .update({
-        mp_payment_id: String(payment.id),
-        mp_auth: mpAuth,
+        mp_payment_id: paymentId ? String(paymentId) : null,
+        mp_auth: mpAuth ? String(mpAuth) : null,
         mp_status_detail: payment.status_detail ?? null,
       })
       .eq("id", saleId);
 
     // 5) Accion segun el estado
-    if (mpStatus === "approved") {
+    const approved = isOrder
+      ? mpStatus === "processed"
+      : mpStatus === "approved";
+    const rejected = isOrder
+      ? (mpStatus === "failed" || mpStatus === "canceled" || mpStatus === "cancelled" || mpStatus === "rejected")
+      : (mpStatus === "rejected" || mpStatus === "cancelled" || mpStatus === "canceled");
+
+    if (approved) {
       const { error: finErr } = await admin.rpc("finalize_mp_sale", { p_sale_id: saleId });
       if (finErr) return json({ error: finErr.message }, 500);
       return json({
         ok: true, action: "finalized", status: "completed",
-        saleId, mpStatus, paymentId: String(payment.id),
+        saleId, mpStatus, paymentId: paymentId ? String(paymentId) : null,
       });
     }
 
-    if (mpStatus === "rejected" || mpStatus === "cancelled") {
+    if (rejected) {
       const { error: canErr } = await admin.rpc("cancel_mp_sale", { p_sale_id: saleId });
       if (canErr) return json({ error: canErr.message }, 500);
       return json({
         ok: true, action: "cancelled", status: "cancelled",
-        saleId, mpStatus, paymentId: String(payment.id),
+        saleId, mpStatus, paymentId: paymentId ? String(paymentId) : null,
       });
     }
 
-    // pending / in_process: solo actualiza el estado
+    // pending / in_process / at_terminal: solo actualiza el estado
     await admin.from("sales").update({ mp_status: mpStatus }).eq("id", saleId);
     return json({
       ok: true, action: "still-pending", status: sale.status,
-      saleId, mpStatus, paymentId: String(payment.id),
+      saleId, mpStatus, paymentId: paymentId ? String(paymentId) : null,
     });
   } catch (e) {
     console.error("[mp-check-payment] error:", e);

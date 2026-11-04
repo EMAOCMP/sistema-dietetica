@@ -127,9 +127,11 @@ Deno.serve(async (req: Request) => {
     const mpAction = String(body?.action ?? qp.get('action') ?? '');
 
     // "payment" tambien puede venir como "payment.updated" / "payment.created"
-    const isPaymentEvent =
+    const isRelevantEvent =
       type === 'payment' || type.startsWith('payment.') ||
-      mpAction === 'payment' || mpAction.startsWith('payment.');
+      type === 'order' || type.startsWith('order.') ||
+      mpAction === 'payment' || mpAction.startsWith('payment.') ||
+      mpAction === 'order' || mpAction.startsWith('order.');
 
     if (!paymentId) {
       // Se registra el body para poder diagnosing que mando MP.
@@ -140,7 +142,7 @@ Deno.serve(async (req: Request) => {
       return json({ ignored: true, type, action: mpAction, paymentId: null, motivo: 'sin paymentId' });
     }
 
-    if (!isPaymentEvent) {
+    if (!isRelevantEvent) {
       return json({ ignored: true, type, action: mpAction, paymentId });
     }
 
@@ -148,6 +150,94 @@ Deno.serve(async (req: Request) => {
     if (!(await verifySignature(req, String(paymentId)))) {
       console.warn("[MP webhook] firma inválida o secret ausente para pago", paymentId);
       return json({ error: "Firma inválida" }, 401);
+    }
+
+    // =========================================================
+    // 1.2) Mercado Pago POINT (terminal Point Smart)
+    //      La notificacion trae TODOS los datos de la order, incluido
+    //      external_reference: no hace falta llamar a la API de MP.
+    // =========================================================
+    if (type === 'order' || type.startsWith('order.') ||
+        mpAction === 'order' || mpAction.startsWith('order.')) {
+      const data = body?.data ?? {};
+      const orderId = String(data.id ?? paymentId);
+      const orderStatus = String(data.status ?? '');
+      const orderExternalRef = data.external_reference
+        ? String(data.external_reference)
+        : undefined;
+      const orderPayment = data?.transactions?.payments?.[0] ?? null;
+
+      if (!orderExternalRef) {
+        return json({ warning: "Order sin external_reference", orderId, orderStatus });
+      }
+
+      const supabaseOrder = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+
+      const { data: saleOrder, error: findOrderErr } = await supabaseOrder
+        .from("sales")
+        .select("id, status")
+        .eq("mp_external_ref", orderExternalRef)
+        .maybeSingle();
+
+      if (findOrderErr) {
+        console.error("[MP webhook] error buscando venta (order):", findOrderErr.message);
+        return json({ error: findOrderErr.message });
+      }
+      if (!saleOrder) {
+        return json({
+          warning: "Venta no encontrada para external_reference",
+          externalRef: orderExternalRef, orderStatus,
+        });
+      }
+
+      // Conciliacion: la order y el pago quedan trazados en la venta.
+      await supabaseOrder
+        .from("sales")
+        .update({
+          mp_order_id: orderId,
+          mp_payment_id: orderPayment?.id ? String(orderPayment.id) : null,
+          mp_auth: orderPayment?.reference?.id ? String(orderPayment.reference.id) : null,
+          mp_status_detail: data.status_detail ? String(data.status_detail) : null,
+        })
+        .eq("id", saleOrder.id);
+
+      let orderAction = "updated";
+      let orderRpcError: string | null = null;
+
+      // Estados de order: processed | failed | canceled | action_required | expired | at_terminal
+      if (orderStatus === "processed") {
+        const { error } = await supabaseOrder.rpc("finalize_mp_sale", { p_sale_id: saleOrder.id });
+        if (error) orderRpcError = error.message;
+        orderAction = "finalized";
+      } else if (
+        orderStatus === "failed" || orderStatus === "canceled" ||
+        orderStatus === "cancelled" || orderStatus === "rejected"
+      ) {
+        const { error } = await supabaseOrder.rpc("cancel_mp_sale", { p_sale_id: saleOrder.id });
+        if (error) orderRpcError = error.message;
+        orderAction = "cancelled";
+      } else {
+        const { error } = await supabaseOrder
+          .from("sales")
+          .update({ mp_status: orderStatus })
+          .eq("id", saleOrder.id);
+        if (error) orderRpcError = error.message;
+      }
+
+      return json({
+        ok: true,
+        action: orderAction,
+        source: "point-order",
+        mpStatus: orderStatus,
+        orderId,
+        paymentId: orderPayment?.id ?? null,
+        externalRef: orderExternalRef,
+        saleId: saleOrder.id,
+        ...(orderRpcError ? { rpcError: orderRpcError } : {}),
+      });
     }
 
     // 2) Traer el pago de MP

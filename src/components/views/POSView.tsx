@@ -59,7 +59,12 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [priceType, setPriceType] = useState<'wholesale' | 'retail'>('wholesale');
   const [saleType, setSaleType] = useState<'internal' | 'afip'>('internal');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card' | 'mercadopago'>('cash');
+  // 'mercadopago'      → Checkout Pro (link / QR online)
+  // 'mercadopago_point' → terminal Mercado Pago Point (Point Smart)
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card' | 'mercadopago' | 'mercadopago_point'>('cash');
+  // El valor que se guarda en sales.payment_method: Point y Checkout Pro
+  // se reportan igual (ambos son Mercado Pago).
+  const dbPaymentMethod = paymentMethod === 'mercadopago_point' ? 'mercadopago' : paymentMethod;
   // Detalle transferencia
   const [transferBank, setTransferBank] = useState(() => {
     try { return localStorage.getItem('dv-transfer-bank') || ''; } catch { return ''; }
@@ -82,6 +87,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [mpPreferenceId, setMpPreferenceId] = useState('');
   const [mpPendingSaleId, setMpPendingSaleId] = useState<string | null>(null);
   const [mpWaiting, setMpWaiting] = useState(false);
+  const [mpOrderId, setMpOrderId] = useState('');
 
   const resetMpState = () => {
     setMpLink('');
@@ -89,6 +95,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
     setMpAuth('');
     setMpPendingSaleId(null);
     setMpWaiting(false);
+    setMpOrderId('');
   };
 
   // El webhook de MP finaliza/cancela la venta.
@@ -227,6 +234,69 @@ export function POSView({ profile, showToast }: POSViewProps) {
     setMpPreferenceId(res.preferenceId || '');
     setMpPendingSaleId(saleId);
     setMpWaiting(true);
+  };
+
+  /**
+   * Mercado Pago POINT (terminal Point Smart).
+   * Crea la venta pendiente y luego la "order" que viaja a la terminal.
+   * El webhook de MP (o el polling de respaldo) termina la venta.
+   */
+  const startMpPointPayment = async () => {
+    if (mpPendingSaleId) return; // ya hay una venta MP en curso, no duplicar
+    const externalRef = `SALE-${(typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+    const opKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `op-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // 1) Venta pendiente (sin stock hasta que se apruebe el pago)
+    const { data, error } = await supabase.rpc('create_mp_pending_sale', {
+      p_customer_name: customerName || 'Cliente General',
+      p_total_amount: totalAmount,
+      p_items: cart.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.priceType === 'wholesale' ? item.product.wholesale_price : item.product.retail_price,
+        cost_price: item.product.cost_price,
+      })),
+      p_payment: { method: 'mercadopago' },
+      p_sale_type: saleType,
+      p_dispatch_type: dispatchType,
+      p_notes: saleNotes || null,
+      p_customer_doc: customerDoc.replace(/\D/g, '') || null,
+      p_customer_iva_cond: customerIvaCond,
+      p_customer_phone: customerPhone.replace(/\D/g, '') || null,
+      p_net_amount: round2(netoFromTotal(totalAmount)),
+      p_iva_amount: round2(ivaFromTotal(totalAmount)),
+      p_profit_amount: totalProfit,
+      p_discount_amount: round2(discountVal),
+      p_idempotency_key: opKey,
+      p_mp_link: null,
+      p_mp_preference_id: null,
+      p_mp_external_ref: externalRef,
+    });
+    if (error) throw error;
+    const saleId = Array.isArray(data) ? data?.[0]?.sale_id : data?.sale_id;
+
+    setMpPendingSaleId(saleId);
+    setMpWaiting(true);
+
+    // 2) Crear la order en la terminal
+    const { data: fnData, error: fnError } = await supabase.functions.invoke('mp-point-order', {
+      body: { p_action: 'create', p_sale_id: saleId, p_mode: mpMode },
+    });
+    if (fnError) {
+      notify(`No se pudo enviar el cobro a la terminal: ${fnError.message}`, 'error');
+      return;
+    }
+    const res = fnData as any;
+    if (res?.error) {
+      notify(`Terminal Point: ${res.error}`, 'error');
+      return;
+    }
+    setMpOrderId(res?.orderId || '');
   };
 
   const abortMpPayment = async () => {
@@ -751,7 +821,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
           iva_amount: round2(ivaFromTotal(totalAmount)),
           profit_amount: totalProfit,
           discount_amount: round2(discountVal),
-          payment_method: paymentMethod,
+          payment_method: dbPaymentMethod,
           dispatch_type: dispatchType,
           notes: saleNotes || null,
           status: 'completed',
@@ -831,6 +901,20 @@ export function POSView({ profile, showToast }: POSViewProps) {
     // Mercado Pago: venta dirigida por pago.
     // Se crea una venta PENDIENTE (sin stock) y el webhook la finaliza
     // al aprobar o la cancela al rechazar. No se limpia el carrito acá.
+    if (paymentMethod === 'mercadopago_point') {
+      console.log('[Sale] mp-point-flow-start', cart.length, 'items');
+      try {
+        await startMpPointPayment();
+        if (showToast) showToast('Cobro enviado a la terminal. Esperando pago…', 'info');
+      } catch (e: any) {
+        console.log('[Sale] mp-point-flow-error', e?.message || e);
+        notify('Error enviando el cobro a la terminal: ' + (e?.message || e), 'error');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (paymentMethod === 'mercadopago') {
       console.log('[Sale] mp-flow-start', cart.length, 'items');
       try {
@@ -1206,6 +1290,38 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 </div>
               </div>
             )}
+            {paymentMethod === 'mercadopago_point' && (
+              <div className="p-3 bg-violet-50/70 dark:bg-violet-500/10 rounded-2xl border border-violet-200 dark:border-violet-500/30 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-extrabold text-violet-800 dark:text-violet-300 uppercase tracking-wide">Mercado Pago (Terminal Point)</p>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${mpMode === 'prod' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'}`}>
+                    {mpMode === 'prod' ? '💰 Producción' : '🧪 Prueba'}
+                  </span>
+                </div>
+                {mpWaiting ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300">
+                      <Loader2 size={14} className="animate-spin shrink-0" />
+                      <span className="text-xs font-bold">Esperando pago en la terminal… La venta se guarda solo si MP la aprueba.</span>
+                    </div>
+                    {mpOrderId && (
+                      <p className="text-[10px] font-mono text-slate-500 truncate">Order: {mpOrderId}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={abortMpPayment}
+                      className="w-full px-3 py-2 bg-white border-2 border-rose-300 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-extrabold transition cursor-pointer"
+                    >
+                      Cancelar espera
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-violet-700 dark:text-violet-300 font-semibold">
+                    Al apretar <b>COBRAR</b> se envía el cobro a la terminal Point. El cliente paga ahí y la venta queda <b>pendiente</b> hasta que MP la apruebe.
+                  </p>
+                )}
+              </div>
+            )}
             {paymentMethod === 'mercadopago' && (
               <div className="p-3 bg-blue-50/70 dark:bg-blue-500/10 rounded-2xl border border-blue-200 dark:border-blue-500/30 space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -1441,7 +1557,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Pago</label>
-                <RoundedSelect size="sm" value={paymentMethod} onChange={(v) => setPaymentMethod(v as any)} options={[{ value: 'cash', label: 'Efectivo 💵' }, { value: 'transfer', label: 'Transf. 📱' }, { value: 'card', label: 'Tarjeta 💳' }, { value: 'mercadopago', label: 'Mercado Pago 💙' }]} />
+                <RoundedSelect size="sm" value={paymentMethod} onChange={(v) => setPaymentMethod(v as any)} options={[{ value: 'cash', label: 'Efectivo 💵' }, { value: 'transfer', label: 'Transf. 🏦' }, { value: 'card', label: 'Tarjeta 💳' }, { value: 'mercadopago', label: 'Mercado Pago 🔗' }, { value: 'mercadopago_point', label: 'MP Terminal 📟' }]} />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Despacho</label>
