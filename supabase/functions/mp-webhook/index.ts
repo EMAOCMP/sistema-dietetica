@@ -96,17 +96,52 @@ Deno.serve(async (req: Request) => {
     try { body = await req.json(); } catch { /* IPN por query string no trae body */ }
 
     const url = new URL(req.url);
-    const paymentId =
-      body?.data?.id ||
-      url.searchParams.get("data.id") ||
-      url.searchParams.get("id");
-    const type = body?.type
-      || url.searchParams.get("type")
-      || url.searchParams.get("topic")
-      || "payment";
+    const qp = url.searchParams;
 
-    if (!paymentId || type !== "payment") {
-      return json({ ignored: true, type, paymentId });
+    // MP manda el ID en distintos lugares segun el modo de entrega:
+    //   - body.data.id              (notificacion JSON moderna)
+    //   - body.query_params."data.id" (IPN: MP reenvia la query original)
+    //   - body.id / body.payment_id  (formato plano)
+    //   - query string: data.id / id / payment_id
+    const bodyQp = (body?.query_params && typeof body.query_params === 'object') ? body.query_params : {};
+    const rawId =
+      body?.data?.id ??
+      body?.data?.payment_id ??
+      body?.data?.attributes?.payment_id ??
+      body?.payment_id ??
+      body?.id ??
+      bodyQp?.['data.id'] ??
+      bodyQp?.id ??
+      bodyQp?.payment_id ??
+      qp.get('data.id') ??
+      qp.get('data[payment_id]') ??
+      qp.get('id') ??
+      qp.get('payment_id') ??
+      null;
+    // El ID puede venir como numero: se normaliza a string.
+    const paymentId = rawId === null || rawId === undefined || rawId === '' ? null : String(rawId);
+
+    const type = String(
+      body?.type ?? qp.get('type') ?? qp.get('topic') ?? body?.action ?? 'payment'
+    );
+    const mpAction = String(body?.action ?? qp.get('action') ?? '');
+
+    // "payment" tambien puede venir como "payment.updated" / "payment.created"
+    const isPaymentEvent =
+      type === 'payment' || type.startsWith('payment.') ||
+      mpAction === 'payment' || mpAction.startsWith('payment.');
+
+    if (!paymentId) {
+      // Se registra el body para poder diagnosing que mando MP.
+      console.warn(
+        '[MP webhook] notificacion sin paymentId',
+        JSON.stringify({ type, mpAction, body: body }).slice(0, 800),
+      );
+      return json({ ignored: true, type, action: mpAction, paymentId: null, motivo: 'sin paymentId' });
+    }
+
+    if (!isPaymentEvent) {
+      return json({ ignored: true, type, action: mpAction, paymentId });
     }
 
     // 1.1) Validar firma del webhook (obligatoria: fail closed)

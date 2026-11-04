@@ -124,13 +124,47 @@ export function POSView({ profile, showToast }: POSViewProps) {
       .subscribe();
 
     let alive = true;
+    // Respaldo: si el webhook de MP no llega, se le pregunta a MP directamente.
+    // Se limita a 1 consulta cada ~8s para no golpear la API.
+    let lastCheck = 0;
+    const CHECK_INTERVAL_MS = 8000;
+
+    const forceCheck = async () => {
+      if (!alive) return;
+      const now = Date.now();
+      if (now - lastCheck < CHECK_INTERVAL_MS) return;
+      lastCheck = now;
+      try {
+        const { data, error } = await supabase.functions.invoke('mp-check-payment', {
+          body: { p_sale_id: mpPendingSaleId },
+        });
+        if (error) return;
+        const r = data as any;
+        if (r?.action === 'finalized') applyStatus('completed');
+        else if (r?.action === 'cancelled') applyStatus('cancelled');
+      } catch { /* sin red o funcion no desplegada: se reintenta en el proximo ciclo */ }
+    };
+
     const poll = async () => {
       const { data } = await supabase
         .from('sales')
         .select('status')
         .eq('id', mpPendingSaleId)
         .maybeSingle();
-      if (alive && data) applyStatus(data.status as string);
+      if (!alive || !data) return;
+      // Si sigue pendiente, se fuerza la consulta a MP.
+      if (data.status === 'pending_payment' || data.status === 'pending') {
+        await forceCheck();
+        if (!alive) return;
+        const { data: fresh } = await supabase
+          .from('sales')
+          .select('status')
+          .eq('id', mpPendingSaleId)
+          .maybeSingle();
+        applyStatus((fresh?.status ?? data.status) as string);
+        return;
+      }
+      applyStatus(data.status as string);
     };
     poll();
     const timer = window.setInterval(poll, 3000);
