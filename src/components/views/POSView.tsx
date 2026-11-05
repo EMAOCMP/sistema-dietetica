@@ -1598,7 +1598,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Banco origen</label>
-                    <RoundedSelect size="sm" value={transferBank} onChange={(v) => setTransferBank(v)} options={[{ value: '', label: 'Seleccionar...' }, ...BANKS_AR.map((b) => ({ value: b, label: b }))]} />
+                    <RoundedSelect size="sm" value={transferBank} onChange={(v) => setTransferBank(v)} options={[{ value: '', label: 'Seleccionar...' }, ...BANKS_AR.map((b) => ({ value: b, label: b }))]} flip={false} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Cuenta destino (alias)</label>

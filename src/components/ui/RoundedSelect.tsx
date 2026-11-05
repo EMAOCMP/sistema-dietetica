@@ -13,6 +13,8 @@ interface RoundedSelectProps {
   options: RoundedOption[];
   size?: 'md' | 'sm';
   menuAlign?: 'left' | 'right';
+  /** Si es false, el menú nunca se abre hacia arriba (siempre hacia abajo). */
+  flip?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface RoundedSelectProps {
  * Menú renderizado via Portal en document.body para que no se corte
  * con overflow ni stacking context de modales (backdrop-filter, etc).
  */
-export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign = 'left' }: RoundedSelectProps) {
+export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign = 'left', flip = true }: RoundedSelectProps) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 170 });
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -36,7 +38,7 @@ export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign
     const need = Math.min(options.length * rowH + 16, CAP);
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
-    const openUp = spaceBelow < need && spaceAbove > spaceBelow;
+    const openUp = flip && spaceBelow < need && spaceAbove > spaceBelow;
     const w = Math.max(rect.width, 170);
     // clamp horizontal para que no se salga de pantalla
     let left = menuAlign === 'right' ? rect.right - w : rect.left;
@@ -45,7 +47,7 @@ export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign
     let top = openUp ? rect.top - need - 4 : rect.bottom + 4;
     top = Math.max(8, Math.min(top, window.innerHeight - 8));
     setMenuPos({ top, left, width: w });
-  }, [open, options.length, size, menuAlign]);
+  }, [open, options.length, size, menuAlign, flip]);
 
   useEffect(() => {
     if (!open) return;
