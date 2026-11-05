@@ -57,7 +57,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [priceType, setPriceType] = useState<'wholesale' | 'retail'>('wholesale');
+  const [priceType, setPriceType] = useState<'wholesale' | 'retail'>('retail');
   const [saleType, setSaleType] = useState<'internal' | 'afip'>('internal');
   // 'mercadopago'      → Checkout Pro (link / QR online)
   // 'mercadopago_point' → terminal Mercado Pago Point (Point Smart)
@@ -73,6 +73,8 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const [transferAccount, setTransferAccount] = useState(() => {
     try { return localStorage.getItem('dv-transfer-account') || ''; } catch { return ''; }
   });
+  const [transferAccountOptions, setTransferAccountOptions] = useState<string[]>([]);
+  const [transferAccountOther, setTransferAccountOther] = useState('');
   const [transferRef, setTransferRef] = useState('');
   // Detalle tarjeta
   const [cardType, setCardType] = useState<'debit' | 'credit'>('debit');
@@ -338,13 +340,32 @@ export function POSView({ profile, showToast }: POSViewProps) {
       notify(`Tarjeta "${clean}" agregada al catálogo.`, 'success');
     } catch { /* sin permiso o sin red: la venta igual se guarda */ }
   };
+  // Auto-registra alias nuevos en el catálogo (sin duplicar)
+  const registerTransferAccount = async (name: string) => {
+    const clean = name.trim();
+    if (!clean || !navigator.onLine) return;
+    try {
+      const norm = normalizeBrandCode(clean);
+      if (!norm) return;
+      const { data: existing } = await supabase.from('transfer_accounts').select('alias').eq('is_active', true);
+      if ((existing || []).some((a: any) => normalizeBrandCode(a.alias) === norm)) return;
+      const { error } = await supabase.from('transfer_accounts').upsert({ alias: clean }, { onConflict: 'alias' });
+      if (error) throw error;
+      setTransferAccountOptions((prev) => {
+        if (prev.some((a) => normalizeBrandCode(a) === norm)) return prev;
+        return [...prev.filter((a) => a !== 'Otro'), clean, 'Otro'];
+      });
+      notify(`Alias "${clean}" agregado al catálogo.`, 'success');
+    } catch { /* sin permiso o sin red: la venta igual se guarda */ }
+  };
   const transferBankEff = transferBank === 'Otro' ? transferBankOther.trim() : transferBank;
+  const transferAccountEff = transferAccount === 'Otro' ? transferAccountOther.trim() : transferAccount;
 
   // Solo envía columnas con valor (compatible con schemas viejos)
   const paymentDetailFields = () => ({
     ...(paymentMethod === 'transfer' ? {
       ...(transferBankEff ? { transfer_bank: transferBankEff } : {}),
-      ...(transferAccount.trim() ? { transfer_account: transferAccount.trim() } : {}),
+      ...(transferAccountEff ? { transfer_account: transferAccountEff } : {}),
       ...(transferRef ? { transfer_ref: transferRef } : {}),
     } : {}),
     ...(paymentMethod === 'card' ? {
@@ -364,7 +385,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
   const rememberPaymentDefaults = () => {
     try {
       if (transferBank) localStorage.setItem('dv-transfer-bank', transferBank);
-      if (transferAccount.trim()) localStorage.setItem('dv-transfer-account', transferAccount.trim());
+      if (transferAccountEff) localStorage.setItem('dv-transfer-account', transferAccountEff);
     } catch { /* noop */ }
   };
 
@@ -509,6 +530,13 @@ export function POSView({ profile, showToast }: POSViewProps) {
         if (brands && brands.length > 0) {
           const names = brands.map((b: any) => b.name).filter(Boolean);
           setCardBrandOptions([...names.filter((n: string) => n !== 'Otra'), 'Otra']);
+        }
+      } catch { /* fallback: lista local */ }
+      try {
+        const { data: accounts } = await supabase.from('transfer_accounts').select('alias').eq('is_active', true).order('alias');
+        if (accounts && accounts.length > 0) {
+          const aliases = accounts.map((a: any) => a.alias).filter(Boolean);
+          setTransferAccountOptions([...aliases.filter((a: string) => a !== 'Otro'), 'Otro']);
         }
       } catch { /* fallback: lista local */ }
     })();
@@ -1574,14 +1602,37 @@ export function POSView({ profile, showToast }: POSViewProps) {
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Cuenta destino (alias)</label>
-                    <input
-                      type="text"
+                    <RoundedSelect
+                      size="sm"
                       value={transferAccount}
-                      onChange={(e) => setTransferAccount(e.target.value)}
-                      placeholder="Ej: VISHAL.MP"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-900"
+                      onChange={(v) => {
+                        setTransferAccount(v);
+                        if (v !== 'Otro') setTransferAccountOther('');
+                      }}
+                      options={[
+                        { value: '', label: 'Seleccionar...' },
+                        ...[...new Set([...transferAccountOptions.filter((a) => a !== 'Otro'), ...(transferAccount && transferAccount !== 'Otro' && !transferAccountOptions.includes(transferAccount) ? [transferAccount] : [])])].map((a) => ({ value: a, label: a })),
+                        { value: 'Otro', label: '➕ Agregar nuevo alias...' },
+                      ]}
                     />
                   </div>
+                  {transferAccount === 'Otro' && (
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Nuevo alias (cuenta destino)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={transferAccountOther}
+                          onChange={(e) => setTransferAccountOther(e.target.value)}
+                          onBlur={() => { if (transferAccountOther.trim()) registerTransferAccount(transferAccountOther); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (transferAccountOther.trim()) registerTransferAccount(transferAccountOther); } }}
+                          placeholder="Ej: VISHAL.MP"
+                          className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-900"
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-1">Se guarda en el catálogo al salir del campo (Enter).</p>
+                    </div>
+                  )}
                 </div>
                 {transferBank === 'Otro' && (
                   <div>
