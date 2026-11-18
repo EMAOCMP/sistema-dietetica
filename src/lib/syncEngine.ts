@@ -222,6 +222,18 @@ async function syncSale(payload: any) {
       if (phoneDigits) {
         await supabase.rpc('set_sale_phone', { p_sale_id: saleId, p_phone: phoneDigits });
       }
+
+      // Fecha real de la venta offline: create_sale usa now(), así que una
+      // venta de las 23:50 sincronizada 00:10 quedaría en el día siguiente.
+      // Se corrige solo si la diferencia es real (más de 2 minutos).
+      const created = salePayload.created_at ? new Date(salePayload.created_at) : null;
+      if (created && !Number.isNaN(created.getTime()) && Math.abs(Date.now() - created.getTime()) > 120_000) {
+        const { error: dateErr } = await supabase.rpc('set_sale_created_at', {
+          p_sale_id: saleId,
+          p_created_at: created.toISOString(),
+        });
+        if (dateErr) console.warn('[Sync] No se pudo ajustar la fecha de la venta:', dateErr.message);
+      }
     }
   } catch { /* noop */ }
 

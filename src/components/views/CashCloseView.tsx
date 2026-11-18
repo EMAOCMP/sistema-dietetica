@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
-import { Calculator, Loader2, Printer, Save, Shield } from 'lucide-react';
+import { Calculator, Loader2, Plus, Printer, Save, Shield, Trash2 } from 'lucide-react';
 import { canCloseCash } from '../../lib/permissions';
 import { fmtMoney } from '../../lib/format';
 import { moneyOrZero, parseMoney } from '../../lib/moneyInput';
@@ -14,6 +14,20 @@ interface CloseRow {
   cash_expected: number;
   cash_counted: number;
   difference: number;
+  opening_float?: number;
+  cash_in?: number;
+  cash_out?: number;
+  cash_expenses?: number;
+  notes?: string | null;
+  created_at: string;
+}
+
+interface CashMovement {
+  id: string;
+  business_date: string;
+  type: 'opening' | 'in' | 'out';
+  amount: number;
+  note: string | null;
   created_at: string;
 }
 
@@ -22,8 +36,17 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const MOVEMENT_LABELS: Record<CashMovement['type'], string> = {
+  opening: 'Fondo inicial',
+  in: 'Ingreso de efectivo',
+  out: 'Retiro / pago en efectivo',
+};
+
 /**
  * Cierre de caja (admin/supervisor): esperado del día vs contado real.
+ *
+ * Esperado = fondo inicial + ventas en efectivo + ingresos
+ *            − retiros − gastos pagados en efectivo.
  */
 export function CashCloseView({ profile, showToast }: {
   profile: Profile | null;
@@ -42,6 +65,13 @@ export function CashCloseView({ profile, showToast }: {
   const [notes, setNotes] = useState('');
   const [history, setHistory] = useState<CloseRow[]>([]);
   const [existing, setExisting] = useState<CloseRow | null>(null);
+  const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [cashExpenses, setCashExpenses] = useState(0);
+
+  const [movType, setMovType] = useState<CashMovement['type']>('opening');
+  const [movAmount, setMovAmount] = useState('');
+  const [movNote, setMovNote] = useState('');
+  const [savingMov, setSavingMov] = useState(false);
 
   useEffect(() => {
     fetchDay();
@@ -76,6 +106,7 @@ export function CashCloseView({ profile, showToast }: {
         card: sum('card'),
         mp: sum('mercadopago'),
       });
+
       const { data: prev } = await supabase
         .from('cash_closes')
         .select('*')
@@ -89,6 +120,26 @@ export function CashCloseView({ profile, showToast }: {
         setCounted('');
         setNotes('');
       }
+
+      const { data: movs } = await supabase
+        .from('cash_movements')
+        .select('id, business_date, type, amount, note, created_at')
+        .eq('business_date', date)
+        .order('created_at', { ascending: true });
+      setMovements((movs || []) as CashMovement[]);
+
+      // Gastos pagados en efectivo del día (salen del cajón).
+      try {
+        const { data: exp } = await supabase
+          .from('expenses')
+          .select('amount, payment_method')
+          .eq('spent_on', date)
+          .eq('payment_method', 'cash');
+        setCashExpenses((exp || []).reduce((a: number, e: any) => a + Number(e.amount || 0), 0));
+      } catch {
+        setCashExpenses(0);
+      }
+
       const { data: hist } = await supabase
         .from('cash_closes')
         .select('*')
@@ -102,10 +153,68 @@ export function CashCloseView({ profile, showToast }: {
     }
   };
 
+  const sumMov = (type: CashMovement['type']) =>
+    movements.filter((m) => m.type === type).reduce((a, m) => a + Number(m.amount || 0), 0);
+
+  const opening = sumMov('opening');
+  const cashIn = sumMov('in');
+  const cashOut = sumMov('out');
+  const expected = opening + stats.cash + cashIn - cashOut - cashExpenses;
+  const openingRow = movements.find((m) => m.type === 'opening') || null;
+
   const countedNum = moneyOrZero(counted);
-  const diff = countedNum - stats.cash;
+  const diff = countedNum - expected;
   const hasCount = counted.trim() !== '';
   const countValid = !hasCount || Number.isFinite(parseMoney(counted));
+  const expectedChanged = !!existing && Math.abs(Number(existing.cash_expected) - expected) > 0.009;
+
+  const handleAddMovement = async () => {
+    if (!canClose) return;
+    const amount = moneyOrZero(movAmount);
+    if (!(amount > 0)) {
+      notify('El monto tiene que ser mayor a cero.', 'warning');
+      return;
+    }
+    if (movType === 'opening' && openingRow && !confirm(`Ya hay un fondo inicial de ${fmtMoney(openingRow.amount)} para el ${date}. ¿Reemplazarlo?`)) return;
+    setSavingMov(true);
+    try {
+      if (movType === 'opening' && openingRow) {
+        const { error } = await supabase
+          .from('cash_movements')
+          .update({ amount, note: movNote.trim() || null })
+          .eq('id', openingRow.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('cash_movements').insert({
+          business_date: date,
+          type: movType,
+          amount,
+          note: movNote.trim() || null,
+          user_id: profile?.id || null,
+        });
+        if (error) throw error;
+      }
+      notify('Movimiento de efectivo guardado.', 'success');
+      setMovAmount('');
+      setMovNote('');
+      fetchDay();
+    } catch (e: any) {
+      notify(`Error: ${e?.message || e}`, 'error');
+    } finally {
+      setSavingMov(false);
+    }
+  };
+
+  const handleDeleteMovement = async (m: CashMovement) => {
+    if (!confirm(`¿Eliminar "${MOVEMENT_LABELS[m.type]}" de ${fmtMoney(m.amount)}?`)) return;
+    const { error } = await supabase.from('cash_movements').delete().eq('id', m.id);
+    if (error) {
+      notify(`Error: ${error.message}`, 'error');
+      return;
+    }
+    notify('Movimiento eliminado.', 'info');
+    fetchDay();
+  };
 
   const handleSave = async () => {
     if (!canClose) return;
@@ -127,10 +236,14 @@ export function CashCloseView({ profile, showToast }: {
         period_end: end,
         sales_count: stats.count,
         total_amount: stats.total,
-        cash_expected: stats.cash,
+        cash_expected: expected,
         transfer_total: stats.transfer,
         card_total: stats.card,
         mp_total: stats.mp,
+        opening_float: opening,
+        cash_in: cashIn,
+        cash_out: cashOut,
+        cash_expenses: cashExpenses,
         cash_counted: countedNum,
         difference: diff,
         notes: notes || null,
@@ -139,16 +252,7 @@ export function CashCloseView({ profile, showToast }: {
       const { error } = await supabase
         .from('cash_closes')
         .upsert(payload, { onConflict: 'business_date' });
-      if (error) {
-        // Esquema viejo: la columna mp_total puede no existir todavía.
-        const isMissingColumn = error.message?.includes('column') || error.code === '42703' || error.code === 'PGRST204';
-        if (!isMissingColumn) throw error;
-        delete payload.mp_total;
-        const { error: retryErr } = await supabase
-          .from('cash_closes')
-          .upsert(payload, { onConflict: 'business_date' });
-        if (retryErr) throw retryErr;
-      }
+      if (error) throw error;
       notify(`Cierre del ${date} guardado. Diferencia: $${diff.toLocaleString('es-AR')}`, diff === 0 ? 'success' : 'warning');
       fetchDay();
     } catch (e: any) {
@@ -198,7 +302,7 @@ export function CashCloseView({ profile, showToast }: {
             {[
               { label: 'Ventas', value: String(stats.count), mono: true },
               { label: 'Total', value: money(stats.total), mono: true },
-              { label: 'Efectivo esperado', value: money(stats.cash), mono: true, hi: true },
+              { label: 'Efectivo esperado', value: money(expected), mono: true, hi: true },
               { label: 'Transf. + Tarjeta + MP', value: money(stats.transfer + stats.card + stats.mp), mono: true },
             ].map((k) => (
               <div key={k.label} className={`rounded-2xl border-2 p-3 ${k.hi ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/40' : 'border-slate-200 dark:border-[#333333] bg-white dark:bg-[#1F1F1F]'}`}>
@@ -208,6 +312,102 @@ export function CashCloseView({ profile, showToast }: {
             ))}
           </div>
 
+          <div data-tour="cashclose-movements" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
+            <div>
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Efectivo del día</p>
+              <p className="text-[11px] font-semibold text-slate-500 tabular-nums mt-1">
+                Fondo {money(opening)} + Ventas {money(stats.cash)} + Ingresos {money(cashIn)}
+                {' '}− Retiros {money(cashOut)} − Gastos {money(cashExpenses)} ={' '}
+                <span className="font-extrabold text-slate-800 dark:text-white">{money(expected)}</span>
+              </p>
+              <p className="text-[10px] font-semibold text-slate-400 mt-1">
+                Los gastos en efectivo de Reportes se descuentan solos: no los cargues también como retiro.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-12 gap-2 items-end">
+              <label className="text-[11px] font-bold text-slate-500 sm:col-span-4">Tipo
+                <select
+                  value={movType}
+                  onChange={(e) => setMovType(e.target.value as CashMovement['type'])}
+                  className="mt-0.5 w-full px-2.5 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                >
+                  <option value="opening">Fondo inicial</option>
+                  <option value="in">Ingreso de efectivo</option>
+                  <option value="out">Retiro / pago</option>
+                </select>
+              </label>
+              <label className="text-[11px] font-bold text-slate-500 sm:col-span-3">Monto
+                <input
+                  type="text" inputMode="decimal" autoComplete="off"
+                  value={movAmount}
+                  onChange={(e) => setMovAmount(e.target.value)}
+                  placeholder="0"
+                  className="mt-0.5 w-full px-2.5 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <label className="text-[11px] font-bold text-slate-500 sm:col-span-3">Nota
+                <input
+                  value={movNote}
+                  onChange={(e) => setMovNote(e.target.value)}
+                  placeholder="Opcional"
+                  className="mt-0.5 w-full px-2.5 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-semibold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <button
+                onClick={handleAddMovement}
+                disabled={savingMov}
+                className="sm:col-span-2 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white rounded-xl text-xs font-extrabold transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {savingMov ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Agregar
+              </button>
+            </div>
+
+            {movType === 'opening' && openingRow && (
+              <p className="text-[11px] font-semibold text-amber-600">
+                Ya hay un fondo de {money(openingRow.amount)}: al agregar, se reemplaza.
+              </p>
+            )}
+
+            {movements.length === 0 ? (
+              <p className="text-sm text-slate-400 font-semibold">Sin movimientos de efectivo en este día.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {movements.map((m) => (
+                  <div key={m.id} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-[#232323] rounded-xl border border-slate-100 dark:border-[#333333] text-sm">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white text-xs">
+                        {MOVEMENT_LABELS[m.type]}
+                        {m.note ? <span className="font-semibold text-slate-400"> · {m.note}</span> : null}
+                      </p>
+                      <p className="text-[11px] text-slate-400 tabular-nums">
+                        {new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-extrabold tabular-nums ${m.type === 'out' ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {m.type === 'out' ? '−' : '+'}{money(m.amount)}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteMovement(m)}
+                        title="Eliminar movimiento"
+                        className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {cashExpenses > 0 && (
+              <p className="text-[11px] font-semibold text-slate-500">
+                Incluye {money(cashExpenses)} de gastos pagados en efectivo (Reporte de Ganancias).
+              </p>
+            )}
+          </div>
+
           <div data-tour="cashclose-count" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="text-[11px] font-bold text-slate-500">
@@ -215,7 +415,7 @@ export function CashCloseView({ profile, showToast }: {
                   <span>Contado real en cajón ($)</span>
                   <button
                     type="button"
-                    onClick={() => setCounted(String(stats.cash))}
+                    onClick={() => setCounted(String(expected))}
                     className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
                   >
                     Usar esperado
@@ -238,6 +438,14 @@ export function CashCloseView({ profile, showToast }: {
                 />
               </label>
             </div>
+
+            {expectedChanged && (
+              <p className="text-[11px] font-semibold text-amber-600">
+                El esperado cambió desde el último cierre (era {money(Number(existing!.cash_expected))}).
+                Guardá de nuevo para actualizarlo.
+              </p>
+            )}
+
             <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${hasCount && countValid && diff === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : hasCount && diff !== 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
               Diferencia: {!hasCount ? '—' : !countValid ? 'importe inválido' : money(diff)} {hasCount && countValid && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
             </div>
@@ -294,16 +502,21 @@ export function CashCloseView({ profile, showToast }: {
             {[
               ['Ventas del día', String(stats.count)],
               ['Total facturado', money(stats.total)],
-              ['Efectivo esperado', money(stats.cash)],
-              ['Transferencia', money(stats.transfer)],
-              ['Tarjeta', money(stats.card)],
-              ['Mercado Pago', money(stats.mp)],
+              ['Ventas en efectivo', money(stats.cash)],
+              ['Fondo inicial', money(opening)],
+              ['Ingresos de efectivo', money(cashIn)],
+              ['Retiros / pagos', money(cashOut)],
+              ['Gastos en efectivo', money(cashExpenses)],
             ].map(([k, v]) => (
               <tr key={k}>
                 <td style={{ padding: '4px 0', borderBottom: '1px solid #ddd' }}>{k}</td>
                 <td style={{ padding: '4px 0', borderBottom: '1px solid #ddd', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{v}</td>
               </tr>
             ))}
+            <tr>
+              <td style={{ padding: '8px 0', fontWeight: 800 }}>Efectivo esperado</td>
+              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(expected)}</td>
+            </tr>
             <tr>
               <td style={{ padding: '8px 0', fontWeight: 800 }}>Contado real en cajón</td>
               <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{hasCount && countValid ? money(countedNum) : '—'}</td>

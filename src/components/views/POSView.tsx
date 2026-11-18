@@ -853,6 +853,9 @@ export function POSView({ profile, showToast }: POSViewProps) {
           dispatch_type: dispatchType,
           notes: saleNotes || null,
           status: 'completed',
+          // Fecha real de la venta: al sincronizar se conserva, así no cae
+          // en el día siguiente si se cobró antes de medianoche.
+          created_at: new Date().toISOString(),
           // Clave de idempotencia: garantiza que un reintento del sync
           // NO cree una venta duplicada.
           idempotency_key: newOpKey(),

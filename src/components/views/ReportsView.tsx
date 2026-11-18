@@ -86,6 +86,7 @@ export function ReportsView({ profile, showToast }: {
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expCat, setExpCat] = useState('otro');
+  const [expPay, setExpPay] = useState('cash');
   const [savingExp, setSavingExp] = useState(false);
 
   const canManage = canViewReports(profile?.role);
@@ -124,7 +125,7 @@ export function ReportsView({ profile, showToast }: {
         const endDay = localDay(new Date(cur.end.getTime() - 86400000));
         const { data: exp, error: expErr } = await supabase
           .from('expenses')
-          .select('id, spent_on, amount, description, category')
+          .select('id, spent_on, amount, description, category, payment_method')
           .gte('spent_on', startDay)
           .lte('spent_on', endDay)
           .order('spent_on', { ascending: true });
@@ -188,7 +189,7 @@ export function ReportsView({ profile, showToast }: {
         description: expDesc.trim(),
         amount,
         category: expCat,
-        payment_method: 'cash',
+        payment_method: expPay,
         user_id: profile?.id || null,
       });
       if (insErr) throw insErr;
@@ -491,7 +492,7 @@ export function ReportsView({ profile, showToast }: {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
               <label className="text-[11px] font-bold text-slate-500">Fecha
                 <input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)}
                   className="mt-0.5 w-full px-2.5 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -517,6 +518,22 @@ export function ReportsView({ profile, showToast }: {
                   />
                 </div>
               </div>
+              <div className="text-[11px] font-bold text-slate-500">Pago
+                <div className="mt-0.5">
+                  <SelectMenu
+                    value={expPay}
+                    options={[
+                      { value: 'cash', label: 'Efectivo' },
+                      { value: 'transfer', label: 'Transferencia' },
+                      { value: 'card', label: 'Tarjeta' },
+                      { value: 'mercadopago', label: 'Mercado Pago' },
+                    ]}
+                    onChange={(v) => setExpPay(String(v))}
+                    ariaLabel="Medio de pago del gasto"
+                    fullWidth
+                  />
+                </div>
+              </div>
             </div>
             <button onClick={handleAddExpense} disabled={savingExp}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
@@ -534,6 +551,11 @@ export function ReportsView({ profile, showToast }: {
                         <p className="text-[11px] text-slate-400 font-semibold tnum">
                           {e.spent_on}
                           {e.category && <span className="ml-1.5 uppercase font-bold text-slate-400/80">· {e.category}</span>}
+                          {e.payment_method && (
+                            <span className="ml-1.5 font-bold text-slate-400/80">
+                              · {e.payment_method === 'cash' ? 'Efectivo' : e.payment_method === 'transfer' ? 'Transferencia' : e.payment_method === 'card' ? 'Tarjeta' : e.payment_method === 'mercadopago' ? 'Mercado Pago' : e.payment_method}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

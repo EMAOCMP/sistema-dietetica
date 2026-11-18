@@ -14,6 +14,7 @@ export interface ReportExpense {
   amount: number | string;
   description?: string;
   category?: string;
+  payment_method?: string;
 }
 
 export interface PeriodRow {
