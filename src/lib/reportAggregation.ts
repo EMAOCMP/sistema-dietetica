@@ -9,6 +9,7 @@ export interface ReportSale {
 }
 
 export interface ReportExpense {
+  id?: string;
   spent_on: string; // YYYY-MM-DD
   amount: number | string;
   description?: string;

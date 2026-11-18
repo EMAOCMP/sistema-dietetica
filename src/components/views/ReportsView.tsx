@@ -17,7 +17,7 @@ import {
   type ReportSale,
   type ReportExpense,
 } from '../../lib/reportAggregation';
-import { downloadCsv, stampName } from '../../lib/exportCsv';
+import { downloadCsv, stampName, fmtMoney } from '../../lib/exportCsv';
 import {
   canDeleteExpenses,
   canRecordExpenses,
@@ -124,7 +124,7 @@ export function ReportsView({ profile, showToast }: {
         const endDay = localDay(new Date(cur.end.getTime() - 86400000));
         const { data: exp, error: expErr } = await supabase
           .from('expenses')
-          .select('spent_on, amount, description, category')
+          .select('id, spent_on, amount, description, category')
           .gte('spent_on', startDay)
           .lte('spent_on', endDay)
           .order('spent_on', { ascending: true });
@@ -203,15 +203,18 @@ export function ReportsView({ profile, showToast }: {
     }
   };
 
-  const handleDeleteExpense = async (spentOn: string, description: string, amount: number) => {
-    if (!confirm(`¿Eliminar el gasto "${description}" (${money0(amount)})?`)) return;
+  const handleDeleteExpense = async (expense: ReportExpense) => {
+    const amount = Number(expense.amount);
+    if (!confirm(`¿Eliminar el gasto "${expense.description}" (${money0(amount)})?`)) return;
+    if (!expense.id) {
+      notify('No se pudo identificar el gasto. Recargá la página e intentá de nuevo.', 'error');
+      return;
+    }
     const { error: delErr } = await supabase
       .from('expenses')
       .delete()
-      .eq('spent_on', spentOn)
-      .eq('description', description)
-      .eq('amount', amount)
-      .limit(1);    if (delErr) {
+      .eq('id', expense.id);
+    if (delErr) {
       notify(`Error: ${delErr.message}`, 'error');
       return;
     }
@@ -221,20 +224,21 @@ export function ReportsView({ profile, showToast }: {
 
   const handleExportCsv = () => {
     const headers = ['Período', 'Tickets', 'Facturación', 'Costo', 'Ganancia bruta', 'Gastos', 'Ganancia neta', 'Margen neto %'];
+    const pct = (revenue: number, profit: number) => marginPct(revenue, profit).toFixed(1).replace('.', ',');
     const body: (string | number)[][] = displayRows.map((r) => [
       r.sublabel ? `${r.label} (${r.sublabel})` : r.label,
       r.tickets,
-      Math.round(r.revenue),
-      Math.round(costOf(r)),
-      Math.round(r.grossProfit),
-      Math.round(r.expenses),
-      Math.round(r.netProfit),
-      marginPct(r.revenue, r.netProfit).toFixed(1),
+      fmtMoney(r.revenue),
+      fmtMoney(costOf(r)),
+      fmtMoney(r.grossProfit),
+      fmtMoney(r.expenses),
+      fmtMoney(r.netProfit),
+      pct(r.revenue, r.netProfit),
     ]);
     body.push([
-      'TOTAL', totals.tickets, Math.round(totals.revenue), Math.round(costOf(totals)),
-      Math.round(totals.grossProfit), Math.round(totals.expenses), Math.round(totals.netProfit),
-      marginPct(totals.revenue, totals.netProfit).toFixed(1),
+      'TOTAL', totals.tickets, fmtMoney(totals.revenue), fmtMoney(costOf(totals)),
+      fmtMoney(totals.grossProfit), fmtMoney(totals.expenses), fmtMoney(totals.netProfit),
+      pct(totals.revenue, totals.netProfit),
     ]);
     downloadCsv(stampName(`reporte-${mode}`), headers, body);
     notify('CSV descargado.', 'success');
@@ -535,7 +539,7 @@ export function ReportsView({ profile, showToast }: {
                       <div className="flex items-center gap-2">
                         <p className="font-extrabold tnum text-slate-700 dark:text-slate-200">{money0(Number(e.amount))}</p>
                         {isAdmin && (
-                          <button onClick={() => handleDeleteExpense(e.spent_on, e.description || '', Number(e.amount))} title="Eliminar"
+                          <button onClick={() => handleDeleteExpense(e)} title="Eliminar"
                             className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition cursor-pointer">
                             <Trash2 size={14} />
                           </button>

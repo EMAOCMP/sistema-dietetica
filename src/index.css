@@ -308,6 +308,9 @@
   .dark .dark\:hover\:bg-white\/5 { background-color: rgba(255, 255, 255, 0.05) !important; }
 }
 
+/* Comprobante de cierre de caja: solo existe en la impresión. */
+#cashclose-print-area { display: none; }
+
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
   body * {
@@ -326,6 +329,26 @@
     border: none !important;
     box-shadow: none !important;
     background: white !important;
+  }
+  /* ===== Cierre de caja: comprobante A4 ===== */
+  #cashclose-print-area, #cashclose-print-area * {
+    visibility: visible;
+  }
+  #cashclose-print-area {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 190mm;
+    margin: 0 auto;
+    padding: 0;
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  #cashclose-print-area * {
+    color: #111111 !important;
+    border-color: #999999 !important;
   }
   .no-print,
   .print-hide {

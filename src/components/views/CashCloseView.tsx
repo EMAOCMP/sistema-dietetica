@@ -117,6 +117,7 @@ export function CashCloseView({ profile, showToast }: {
       notify('El efectivo contado no es un importe válido.', 'error');
       return;
     }
+    if (existing && !confirm(`Ya hay un cierre guardado para el ${date}. ¿Querés reemplazarlo?`)) return;
     setSaving(true);
     try {
       const { start, end } = dayRange(date);
@@ -176,10 +177,6 @@ export function CashCloseView({ profile, showToast }: {
           <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <Calculator className="text-emerald-600" size={22} /> Cierre de caja
           </h1>
-          <div className="text-center pb-4 mb-4 border-b border-slate-100 dark:border-white/5">
-            <img src="/logo-512.jpg" alt="Vishal Dietética" className="h-12 mx-auto mb-1 object-contain" />
-            <p className="font-extrabold text-slate-900 dark:text-white">DIETÉTICA VISHAL</p>
-          </div>
           <p className="text-xs text-slate-500 font-semibold">Esperado del día vs contado real del cajón.</p>
         </div>
         <input
@@ -282,6 +279,59 @@ export function CashCloseView({ profile, showToast }: {
             </span>
           </div>
         ))}
+      </div>
+
+      {/* Comprobante de impresión (solo visible al imprimir) */}
+      <div id="cashclose-print-area">
+        <div className="text-center border-b-2 border-black pb-2 mb-3">
+          <img src="/logo-512.jpg" alt="Vishal Dietética" style={{ height: 56, margin: '0 auto 4px', objectFit: 'contain' }} />
+          <p className="text-lg font-extrabold">DIETÉTICA VISHAL</p>
+          <p className="text-sm font-bold">Cierre de caja · {date.split('-').reverse().join('/')}</p>
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <tbody>
+            {[
+              ['Ventas del día', String(stats.count)],
+              ['Total facturado', money(stats.total)],
+              ['Efectivo esperado', money(stats.cash)],
+              ['Transferencia', money(stats.transfer)],
+              ['Tarjeta', money(stats.card)],
+              ['Mercado Pago', money(stats.mp)],
+            ].map(([k, v]) => (
+              <tr key={k}>
+                <td style={{ padding: '4px 0', borderBottom: '1px solid #ddd' }}>{k}</td>
+                <td style={{ padding: '4px 0', borderBottom: '1px solid #ddd', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{v}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ padding: '8px 0', fontWeight: 800 }}>Contado real en cajón</td>
+              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{hasCount && countValid ? money(countedNum) : '—'}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '8px 0', fontWeight: 800, borderTop: '2px solid #000' }}>Diferencia</td>
+              <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 800, borderTop: '2px solid #000', fontVariantNumeric: 'tabular-nums' }}>
+                {hasCount && countValid ? `${money(diff)}${diff === 0 ? ' (cuadra)' : diff > 0 ? ' (sobrante)' : ' (faltante)'}` : '—'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {notes.trim() && (
+          <p style={{ marginTop: 12, fontSize: 12 }}>
+            <span style={{ fontWeight: 800 }}>Notas: </span>{notes}
+          </p>
+        )}
+
+        <div style={{ marginTop: 32, display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+          <div>
+            <div style={{ borderTop: '1px solid #000', width: 180, paddingTop: 4 }}>Firma</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontWeight: 700 }}>{profile?.full_name || '—'}</p>
+            <p>Impreso el {new Date().toLocaleString('es-AR')}</p>
+          </div>
+        </div>
       </div>
     </div>
   );
