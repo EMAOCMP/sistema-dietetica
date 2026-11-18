@@ -52,4 +52,5 @@ Tiene que dar **stock desincronizado = 0** y **stock negativo = 0**.
 ## Pendientes conocidos (no bloquean la operación)
 
 - Una OC recibida con faltante queda como "recibida"; el faltante se ve por línea.
-- Si cargás un gasto en efectivo después de guardar el cierre, volvé a guardarlo para actualizar el esperado.
+- Si vendés o cargás un gasto en efectivo después de guardar el cierre, la pantalla avisa
+  "El cierre quedó desactualizado": volvé a guardarlo para que el comprobante coincida.

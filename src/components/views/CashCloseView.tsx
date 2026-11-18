@@ -20,6 +20,7 @@ interface CloseRow {
   cash_expenses?: number;
   notes?: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 interface CashMovement {
@@ -67,6 +68,9 @@ export function CashCloseView({ profile, showToast }: {
   const [existing, setExisting] = useState<CloseRow | null>(null);
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [cashExpenses, setCashExpenses] = useState(0);
+  // Último movimiento del día (venta, gasto o efectivo): sirve para saber si
+  // el cierre guardado quedó viejo porque entró algo después de guardarlo.
+  const [lastActivityAt, setLastActivityAt] = useState(0);
 
   const [movType, setMovType] = useState<CashMovement['type']>('opening');
   const [movAmount, setMovAmount] = useState('');
@@ -90,7 +94,7 @@ export function CashCloseView({ profile, showToast }: {
       const { start, end } = dayRange(date);
       const { data: sales, error } = await supabase
         .from('sales')
-        .select('total_amount, payment_method, status')
+        .select('total_amount, payment_method, status, created_at')
         .gte('created_at', start)
         .lte('created_at', end)
         .neq('status', 'cancelled');
@@ -106,6 +110,9 @@ export function CashCloseView({ profile, showToast }: {
         card: sum('card'),
         mp: sum('mercadopago'),
       });
+
+      const msAt = (v?: string | null) => (v ? new Date(v).getTime() : 0);
+      let lastAt = list.reduce((max: number, s: any) => Math.max(max, msAt(s.created_at)), 0);
 
       const { data: prev } = await supabase
         .from('cash_closes')
@@ -127,18 +134,27 @@ export function CashCloseView({ profile, showToast }: {
         .eq('business_date', date)
         .order('created_at', { ascending: true });
       setMovements((movs || []) as CashMovement[]);
+      lastAt = (movs || []).reduce(
+        (max: number, m: any) => Math.max(max, msAt(m.created_at)),
+        lastAt,
+      );
 
       // Gastos pagados en efectivo del día (salen del cajón).
       try {
         const { data: exp } = await supabase
           .from('expenses')
-          .select('amount, payment_method')
+          .select('amount, payment_method, created_at')
           .eq('spent_on', date)
           .eq('payment_method', 'cash');
         setCashExpenses((exp || []).reduce((a: number, e: any) => a + Number(e.amount || 0), 0));
+        lastAt = (exp || []).reduce(
+          (max: number, e: any) => Math.max(max, msAt(e.created_at)),
+          lastAt,
+        );
       } catch {
         setCashExpenses(0);
       }
+      setLastActivityAt(lastAt);
 
       const { data: hist } = await supabase
         .from('cash_closes')
@@ -167,6 +183,16 @@ export function CashCloseView({ profile, showToast }: {
   const hasCount = counted.trim() !== '';
   const countValid = !hasCount || Number.isFinite(parseMoney(counted));
   const expectedChanged = !!existing && Math.abs(Number(existing.cash_expected) - expected) > 0.009;
+  const closeSavedAt = existing
+    ? new Date(existing.updated_at || existing.created_at).getTime()
+    : 0;
+  // 1 s de margen: guardar y recargar no siempre caen en el mismo milisegundo.
+  const closeStale = !!existing && lastActivityAt > closeSavedAt + 1000;
+  const closeSavedLabel = closeSavedAt
+    ? new Date(closeSavedAt).toLocaleString('es-AR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    })
+    : '';
 
   const handleAddMovement = async () => {
     if (!canClose) return;
@@ -174,6 +200,17 @@ export function CashCloseView({ profile, showToast }: {
     if (!(amount > 0)) {
       notify('El monto tiene que ser mayor a cero.', 'warning');
       return;
+    }
+    if (movType === 'out') {
+      // No puede salir del cajón más de lo que debería haber.
+      const available = opening + stats.cash + cashIn - cashOut - cashExpenses;
+      if (amount > available + 0.009) {
+        const ok = confirm(
+          `El retiro (${fmtMoney(amount)}) supera el efectivo esperado del día (${fmtMoney(available)}).\n\n` +
+          'Solo puede salir del cajón lo que hay. Si igual lo registrás, el cierre va a dar faltante.\n\n¿Registrarlo igual?',
+        );
+        if (!ok) return;
+      }
     }
     if (movType === 'opening' && openingRow && !confirm(`Ya hay un fondo inicial de ${fmtMoney(openingRow.amount)} para el ${date}. ¿Reemplazarlo?`)) return;
     setSavingMov(true);
@@ -248,6 +285,8 @@ export function CashCloseView({ profile, showToast }: {
         difference: diff,
         notes: notes || null,
         user_id: profile?.id || null,
+        // Marca de la última vez que se guardó: si después entra algo, se avisa.
+        updated_at: new Date().toISOString(),
       };
       const { error } = await supabase
         .from('cash_closes')
@@ -439,12 +478,26 @@ export function CashCloseView({ profile, showToast }: {
               </label>
             </div>
 
-            {expectedChanged && (
+            {closeStale ? (
+              <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/40 px-3 py-2">
+                <p className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300">
+                  El cierre quedó desactualizado
+                </p>
+                <p className="text-[11px] font-semibold text-amber-700/90 dark:text-amber-200/80">
+                  Se guardó el {closeSavedLabel} y después entraron ventas, gastos o movimientos de efectivo.
+                  Guardá de nuevo para que el comprobante coincida.
+                </p>
+              </div>
+            ) : expectedChanged ? (
               <p className="text-[11px] font-semibold text-amber-600">
                 El esperado cambió desde el último cierre (era {money(Number(existing!.cash_expected))}).
                 Guardá de nuevo para actualizarlo.
               </p>
-            )}
+            ) : existing ? (
+              <p className="text-[11px] font-semibold text-emerald-600">
+                Cierre guardado el {closeSavedLabel}. Sin movimientos posteriores.
+              </p>
+            ) : null}
 
             <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${hasCount && countValid && diff === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : hasCount && diff !== 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
               Diferencia: {!hasCount ? '—' : !countValid ? 'importe inválido' : money(diff)} {hasCount && countValid && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
