@@ -48,14 +48,15 @@ pantalla al **13/11/2026**.
 | Cierre de caja | fecha **13/11/2026** | 3 ventas · 103.620 · contado 54.620 · diferencia **0** |
 | Pedidos & Historial | **Mes** (o Personalizado 13/11 → 13/11) | 4 tickets, uno **anulado** |
 | Reportes | **Día 13/11** (o **Mes** de noviembre) | 3 tickets · 103.620 · ganancia 42.440 · margen 41 % |
-| Órdenes de Compra | sin filtro de fecha | `OC-000001` recibida · 32.500 |
-| Ingreso Mercadería | sin filtro de fecha | `ING-000001` 255.000 · `ING-000002` 32.500 |
+| Órdenes de Compra | sin filtro de fecha | `OC-000001` recibida · 32.500 · `OC-000002` recibida con faltante · real 23.500 |
+| Ingreso Mercadería | sin filtro de fecha | `ING-000001` 255.000 · `ING-000002` 32.500 · `ING-000003` 23.500 |
 | Productos / Stock | — | 3 bajo objetivo: Almendras 3/5, Nueces 3/4, Maní 5/6 |
 | Panel Principal | **Mes** | facturación, ganancia y stock del período |
 
 **Qué sí se puede hacer en vivo sin romper el cierre:** generar una orden de
-compra nueva (`OC-000002`), enviarla y recibirla con faltante. Eso mueve
-stock, no caja.
+compra nueva (`OC-000003`), enviarla y recibirla con faltante. Eso mueve
+stock, no caja. Ya quedan dos órdenes de ejemplo: `OC-000001` recibida
+completa y `OC-000002` recibida con faltante de 1 unidad.
 
 **Qué NO conviene hacer en vivo:** ventas nuevas. Quedan con fecha de hoy y no
 entran en el cierre del 13/11, que ya está guardado; el “esperado” de la caja
@@ -211,7 +212,7 @@ Tocar **Usar esperado** y guardar. Diferencia **0 · Cuadra**.
 1. **Generar orden**: el modal lista lo que está bajo objetivo.
 2. Marcar Almendras, Nueces y Maní.
 3. Modo **Manual**: Almendras `2`, Nueces `1`, Maní `1`.
-4. **Generar orden** → `OC-000001` en borrador.
+4. **Generar orden** → `OC-000003` en borrador.
 5. **Enviar** → se arma el WhatsApp con el detalle para el proveedor.
 6. **Recibir** → crea el ingreso y navega a Ingreso Mercadería.
 7. En el borrador, bajar **Almendras de 2 a 1** (llegó menos).
