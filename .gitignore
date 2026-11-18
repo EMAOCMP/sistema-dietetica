@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Recursos fuera del proyecto (movidos a ../Dietetica-Extras)
+.opencode/
+.agents/
+presentacion/
+skills-lock.json
