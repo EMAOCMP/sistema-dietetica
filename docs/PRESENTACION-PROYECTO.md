@@ -312,7 +312,7 @@ de Supabase sobre `sales`, sirve también para ventas hechas desde otro disposit
 
 - ABM completo: código (con escáner o generador), nombre (detecta duplicados), categoría, unidad
   (un/kg), costos y precios con **calculadora de margen en vivo** y alerta de venta a pérdida,
-  stock inicial, mínimo de alerta, vencimiento, proveedor y foto (storage `product-images`).
+  stock inicial, stock objetivo (mínimo), vencimiento, proveedor y foto (storage `product-images`).
 - Vistas: activos / dados de baja, filtros (categoría, 🔴 críticos, ⏳ por vencer), orden, selección
   múltiple, densidad cómoda/compacta.
 - Herramientas: **Conteo físico**, **Lista de precios**, **Etiquetas** de góndola, **Importar CSV**,

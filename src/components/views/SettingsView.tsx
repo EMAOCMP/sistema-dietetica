@@ -523,7 +523,7 @@ export function SettingsView({ currentUser, showToast }: {
       </div>
 
       {/* Terminal Mercado Pago POINT */}
-      <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 sm:p-5 space-y-3">
+      <div data-tour="settings-point" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 sm:p-5 space-y-3">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
           <span>📟 Terminal Point (Point Smart)</span>
         </p>

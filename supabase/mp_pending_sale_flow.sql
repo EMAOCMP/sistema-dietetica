@@ -78,12 +78,13 @@ BEGIN
   END IF;
 
   INSERT INTO sales (
-    user_id, customer_name, customer_doc, customer_iva_cond,
+    user_id, customer_name, customer_doc, customer_iva_cond, customer_phone,
     sale_type, total_amount, net_amount, iva_amount, profit_amount, discount_amount,
     payment_method, dispatch_type, notes, status, idempotency_key,
     mp_status, mp_link, mp_preference_id, mp_external_ref
   ) VALUES (
     auth.uid(), p_customer_name, p_customer_doc, p_customer_iva_cond,
+    NULLIF(regexp_replace(COALESCE(p_customer_phone, ''), '\D', '', 'g'), ''),
     p_sale_type, p_total_amount, COALESCE(p_net_amount, p_total_amount), COALESCE(p_iva_amount, 0), COALESCE(p_profit_amount, 0), COALESCE(p_discount_amount, 0),
     'mercadopago', p_dispatch_type, p_notes, 'pending_payment', p_idempotency_key,
     'pending', p_mp_link, p_mp_preference_id, p_mp_external_ref

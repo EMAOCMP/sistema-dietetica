@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import type { UserRole } from '../../types';
+import { canViewReports, canViewUsers } from '../../lib/permissions';
 import {
   MagnifyingGlass, ShoppingCart, Package, ClockCounterClockwise,
   Users, SquaresFour, Sun, Moon, ChartBar,
@@ -11,6 +13,8 @@ interface CommandPaletteProps {
   onNavigate: (tab: string, productSearch?: string) => void;
   onToggleTheme: () => void;
   dark: boolean;
+  /** Rol del usuario: la lista de acciones se filtra con los mismos permisos que la navegación. */
+  role?: UserRole | null;
 }
 
 interface ActionItem {
@@ -33,7 +37,7 @@ interface ProductItem {
 
 type Item = ActionItem | ProductItem;
 
-export function CommandPalette({ open, onClose, onNavigate, onToggleTheme, dark }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, onNavigate, onToggleTheme, dark, role }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [products, setProducts] = useState<any[]>([]);
@@ -71,10 +75,15 @@ export function CommandPalette({ open, onClose, onNavigate, onToggleTheme, dark 
     { kind: 'action', id: 'products', label: 'Productos', hint: 'Stock', keywords: 'productos stock inventario mercaderia', icon: <Package size={17} weight="fill" />, run: () => onNavigate('products') },
     { kind: 'action', id: 'dashboard', label: 'Panel Principal', hint: 'Resumen', keywords: 'panel dashboard inicio resumen operativo', icon: <SquaresFour size={17} weight="fill" />, run: () => onNavigate('dashboard') },
     { kind: 'action', id: 'history', label: 'Historial', hint: 'Pedidos', keywords: 'historial pedidos tickets ventas', icon: <ClockCounterClockwise size={17} weight="fill" />, run: () => onNavigate('history') },
-    { kind: 'action', id: 'reports', label: 'Reportes de Ganancias', hint: 'Diario / Semanal / Mensual', keywords: 'reportes ganancias profit diario semanal mensual margen', icon: <ChartBar size={17} weight="fill" />, run: () => onNavigate('reports') },
-    { kind: 'action', id: 'users', label: 'Usuarios', hint: 'Permisos', keywords: 'usuarios permisos roles empleados', icon: <Users size={17} weight="fill" />, run: () => onNavigate('users') },
+    { kind: 'action', id: 'purchaseorders', label: 'Ordenes de Compra', hint: 'Proveedores', keywords: 'ordenes compra proveedores reposicion demanda', icon: <Package size={17} weight="fill" />, run: () => onNavigate('purchaseorders') },
+    ...(canViewReports(role)
+      ? [{ kind: 'action' as const, id: 'reports', label: 'Reportes de Ganancias', hint: 'Diario / Semanal / Mensual', keywords: 'reportes ganancias profit diario semanal mensual margen', icon: <ChartBar size={17} weight="fill" />, run: () => onNavigate('reports') }]
+      : []),
+    ...(canViewUsers(role)
+      ? [{ kind: 'action' as const, id: 'users', label: 'Usuarios', hint: 'Permisos', keywords: 'usuarios permisos roles empleados', icon: <Users size={17} weight="fill" />, run: () => onNavigate('users') }]
+      : []),
     { kind: 'action', id: 'theme', label: dark ? 'Tema claro' : 'Tema oscuro', hint: 'Apariencia', keywords: 'tema oscuro claro dark light apariencia modo', icon: dark ? <Sun size={17} weight="fill" /> : <Moon size={17} weight="fill" />, run: () => { onToggleTheme(); onClose(); } },
-  ], [onNavigate, onToggleTheme, onClose, dark]);
+  ], [onNavigate, onToggleTheme, onClose, dark, role]);
 
   const matchedActions = useMemo(() => {
     const q = query.trim().toLowerCase();

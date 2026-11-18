@@ -1,11 +1,20 @@
 -- ============================================
 -- Dietética Vishal - MVP Stock Model
--- Ejecutar en Supabase SQL Editor
--- Modelo paralelo (no rompe el actual):
---   locations || inventory || inventory_movements || product_barcodes v2
--- Backfill desde products.stock_quantity y products.barcode
--- RPCs transaccionales: add_stock() / adjust_stock()
--- Trigger: mantiene products.stock_quantity sincronizado con inventory (compat)
+--
+--  ⚠️  INSTALACIÓN INICIAL — NO EJECUTAR SOBRE UNA BASE CON DATOS  ⚠️
+--
+--  Este archivo DESTRUYE datos a propósito:
+--    - DROP TABLE inventory_movements CASCADE  (borra el historial)
+--    - DELETE FROM product_barcodes (dedupe)
+--    - Rehace el backfill de stock desde products.stock_quantity
+--
+--  Para arreglar funciones en una base existente usá, en este orden:
+--    fix_3_confirmar_ingreso.sql
+--    fix_4_ajuste_stock.sql
+--    fix_5_add_stock.sql
+--    reconciliar_inventario.sql
+--
+--  Solo sirve para crear el modelo desde cero (proyecto nuevo).
 -- ============================================
 
 BEGIN;
@@ -192,7 +201,7 @@ CREATE OR REPLACE FUNCTION add_stock(
   p_expiration_date DATE DEFAULT NULL,
   p_reference_type TEXT DEFAULT 'manual',
   p_reference_id TEXT DEFAULT NULL
-) RETURNS TABLE(product_id UUID, new_quantity NUMERIC, previous_quantity NUMERIC)
+) RETURNS TABLE(o_product_id UUID, o_new_quantity NUMERIC, o_previous_quantity NUMERIC)
 LANGUAGE plpgsql SECURITY DEFINER
 AS $$
 DECLARE
@@ -223,20 +232,21 @@ BEGIN
   ON CONFLICT (product_id, location_id) DO NOTHING;
 
   -- bloqueo + saldo actual
-  SELECT quantity INTO v_prev
-  FROM inventory
-  WHERE product_id = p_product_id AND location_id = v_loc
+  -- Columnas calificadas: product_id también es parámetro de salida (ambiguo).
+  SELECT i.quantity INTO v_prev
+  FROM inventory i
+  WHERE i.product_id = p_product_id AND i.location_id = v_loc
   FOR UPDATE;
 
   v_new := v_prev + p_quantity;
 
   -- actualiza saldo
-  UPDATE inventory
+  UPDATE inventory i
     SET quantity = v_new,
-        lot_number = COALESCE(p_lot_number, lot_number),
-        expiration_date = COALESCE(p_expiration_date, expiration_date),
+        lot_number = COALESCE(p_lot_number, i.lot_number),
+        expiration_date = COALESCE(p_expiration_date, i.expiration_date),
         updated_at = now()
-  WHERE product_id = p_product_id AND location_id = v_loc;
+  WHERE i.product_id = p_product_id AND i.location_id = v_loc;
 
   -- auditoría (solo-append)
   INSERT INTO inventory_movements
@@ -267,7 +277,7 @@ CREATE OR REPLACE FUNCTION adjust_stock(
   p_reason TEXT DEFAULT NULL,
   p_reference_type TEXT DEFAULT 'adjustment',
   p_reference_id TEXT DEFAULT NULL
-) RETURNS TABLE(product_id UUID, new_quantity NUMERIC, previous_quantity NUMERIC)
+) RETURNS TABLE(o_product_id UUID, o_new_quantity NUMERIC, o_previous_quantity NUMERIC)
 LANGUAGE plpgsql SECURITY DEFINER
 AS $$
 DECLARE
@@ -295,9 +305,10 @@ BEGIN
   VALUES (p_product_id, v_loc, 0)
   ON CONFLICT (product_id, location_id) DO NOTHING;
 
-  SELECT quantity INTO v_prev
-  FROM inventory
-  WHERE product_id = p_product_id AND location_id = v_loc
+  -- Columnas calificadas: product_id también es parámetro de salida (ambiguo).
+  SELECT i.quantity INTO v_prev
+  FROM inventory i
+  WHERE i.product_id = p_product_id AND i.location_id = v_loc
   FOR UPDATE;
 
   v_new := v_prev + p_quantity;
@@ -310,9 +321,9 @@ BEGIN
     ELSE 'adjustment'
   END;
 
-  UPDATE inventory
+  UPDATE inventory i
     SET quantity = v_new, updated_at = now()
-  WHERE product_id = p_product_id AND location_id = v_loc;
+  WHERE i.product_id = p_product_id AND i.location_id = v_loc;
 
   INSERT INTO inventory_movements
     (product_id, location_id, type, quantity, previous_quantity, new_quantity,

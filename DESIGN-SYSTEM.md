@@ -253,7 +253,7 @@ src/
 ### 3.3 Sidebar (`components/layout/Navbar.tsx`)
 
 - Ancho `w-64` (expandida) / `lg:w-20` (plegada), `fixed` en móvil y `lg:static` en escritorio.
-- Secciones: **Principal** (Panel, Venta POS, Productos/Stock) y **Gestión** (Ingreso, Historial, Mi actividad, Cierre de caja, Reportes, Usuarios). `Configuración` al pie para `admin | supervisor | vendedor`.
+- Secciones: **Principal** (Panel, Venta POS, Productos/Stock) y **Gestión** (Ingreso, Órdenes de compra, Historial, Mi actividad, Cierre de caja, Reportes, Usuarios). `Configuración` al pie para `admin | supervisor | vendedor`.
 - Ítem activo: `bg-brand-500/10 text-brand-600 dark:text-brand-400` + barra lateral `w-1 h-8 rounded-r-full bg-brand-500 shadow-glow-brand`.
 - Ícono activo: `weight="fill"`.
 - Badges: `text-[10px] font-bold px-1.5 py-0.5 rounded-full`, `bg-red-500` (stock crítico) y `bg-sky-500` (pendientes de sync); con `99+` a partir de 100.

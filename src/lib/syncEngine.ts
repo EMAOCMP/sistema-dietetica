@@ -217,6 +217,11 @@ async function syncSale(payload: any) {
             .eq('product_id', item.product_id);
         }
       }
+      // Teléfono del cliente (best-effort, ver salesService.persistSalePhone)
+      const phoneDigits = String(salePayload.customer_phone || '').replace(/\D/g, '');
+      if (phoneDigits) {
+        await supabase.rpc('set_sale_phone', { p_sale_id: saleId, p_phone: phoneDigits });
+      }
     }
   } catch { /* noop */ }
 
@@ -235,12 +240,27 @@ async function syncStockAdjustment(payload: any) {
 }
 
 async function syncProductCreate(payload: any) {
+  // El stock inicial no se escribe directo en products: se carga con
+  // adjust_stock para que inventory y products.stock_quantity queden iguales.
+  const initialStock = Math.round((Number(payload?.stock_quantity) || 0) * 100) / 100;
+  const rest = { ...(payload || {}) };
+  delete rest.stock_quantity;
   const { data, error } = await supabase
     .from('products')
-    .insert(payload)
+    .insert({ ...rest, stock_quantity: 0 })
     .select('id')
     .single();
   if (error) throw error;
+  if (data?.id && initialStock > 0) {
+    const { error: stockError } = await supabase.rpc('adjust_stock', {
+      p_product_id: data.id,
+      p_quantity: initialStock,
+      p_reason: 'Stock inicial (alta offline)',
+      p_reference_type: 'import',
+    });
+    // No se relanza: reintentar duplicaría el producto ya insertado.
+    if (stockError) console.warn('[Sync] No se pudo cargar el stock inicial:', stockError.message);
+  }
   if (data?.id && payload?.barcode) {
     const res = await upsertProductBarcode(data.id, payload.barcode);
     if (res.error) console.warn('[Sync] No se pudo registrar el código offline en product_barcodes:', res.error);
@@ -248,9 +268,24 @@ async function syncProductCreate(payload: any) {
 }
 
 async function syncProductUpdate(payload: any) {
-  const { id, ...updates } = payload;
+  const { id, stock_quantity, ...updates } = payload;
   const { error } = await supabase.from('products').update(updates).eq('id', id);
   if (error) throw error;
+  // Si la edición offline cambió el stock, se aplica como diferencia real.
+  if (stock_quantity != null) {
+    const target = Math.round((Number(stock_quantity) || 0) * 100) / 100;
+    const { data: inv } = await supabase.from('inventory').select('quantity').eq('product_id', id);
+    const current = (inv || []).reduce((a: number, r: any) => a + Number(r.quantity || 0), 0);
+    const diff = Math.round((target - current) * 100) / 100;
+    if (diff !== 0) {
+      const { error: stockError } = await supabase.rpc('adjust_stock', {
+        p_product_id: id,
+        p_quantity: diff,
+        p_reason: 'Ajuste desde edición offline',
+      });
+      if (stockError) console.warn('[Sync] No se pudo ajustar el stock:', stockError.message);
+    }
+  }
   if (updates.barcode) {
     const res = await upsertProductBarcode(id, updates.barcode);
     if (res.error) console.warn('[Sync] No se pudo registrar el código offline en product_barcodes:', res.error);

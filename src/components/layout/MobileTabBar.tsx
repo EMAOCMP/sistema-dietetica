@@ -52,15 +52,12 @@ export function MobileTabBar({ profile, activeTab, setActiveTab }: MobileTabBarP
 
   const moreItems = [
     { id: 'intake', label: 'Ingreso Mercadería', icon: Truck },
+    { id: 'purchaseorders', label: 'Ordenes de Compra', icon: Truck },
     { id: 'history', label: 'Pedidos & Historial', icon: ClockCounterClockwise },
     { id: 'activity', label: 'Mi actividad', icon: ChartLine },
-    ...((canCloseCash(profile?.role) && canViewReports(profile?.role) && canViewUsers(profile?.role))
-      ? [
-          { id: 'cashclose', label: 'Cierre de Caja', icon: Calculator },
-          { id: 'reports', label: 'Reportes de Ganancias', icon: ChartBar },
-          { id: 'users', label: 'Usuarios y Actividad', icon: Users },
-        ]
-      : []),
+    ...(canCloseCash(profile?.role) ? [{ id: 'cashclose', label: 'Cierre de Caja', icon: Calculator }] : []),
+    ...(canViewReports(profile?.role) ? [{ id: 'reports', label: 'Reportes de Ganancias', icon: ChartBar }] : []),
+    ...(canViewUsers(profile?.role) ? [{ id: 'users', label: 'Usuarios y Actividad', icon: Users }] : []),
     ...(canManageSettings(profile?.role)
       ? [{ id: 'settings', label: 'Configuración', icon: Gear }]
       : []),

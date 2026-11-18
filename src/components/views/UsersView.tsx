@@ -7,6 +7,11 @@ import {
 } from 'lucide-react';
 import { EmptyState } from '../../features/onboarding';
 import {
+  PermissionChips,
+  RolePermissionsMatrix,
+  RolePermissionsModal,
+} from '../ui/RolePermissionsPanel';
+import {
   canChangeRoles as canChangeUserRoles,
   canViewUsers,
 } from '../../lib/permissions';
@@ -38,15 +43,9 @@ const ROLE_META: Record<UserRole, { label: string; icon: typeof Crown; chip: str
 
 const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
   { value: 'admin', label: 'Administrador (Total)', desc: 'Acceso completo' },
-  { value: 'supervisor', label: 'Supervisor (Control)', desc: 'Stock y reportes' },
-  { value: 'vendedor', label: 'Vendedor (Caja/POS)', desc: 'Solo ventas' },
+  { value: 'supervisor', label: 'Supervisor (Control)', desc: 'Gestión sin roles' },
+  { value: 'vendedor', label: 'Vendedor (Caja/POS)', desc: 'Ventas, productos e ingresos' },
 ];
-
-const PERMISSIONS: Record<UserRole, string[]> = {
-  admin: ['Productos', 'Costos', 'Usuarios', 'Reportes', 'Caja'],
-  supervisor: ['Stock', 'Alertas', 'Reportes', 'Ventas', 'Usuarios (ver)'],
-  vendedor: ['Caja / POS'],
-};
 
 export function UsersView({ currentUser }: UsersViewProps) {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -57,6 +56,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
   const [activityMoves, setActivityMoves] = useState<any[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [openRoleMenu, setOpenRoleMenu] = useState<string | null>(null);
+  const [permissionsRole, setPermissionsRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -158,7 +158,9 @@ export function UsersView({ currentUser }: UsersViewProps) {
     );
   }
 
-  const canChangeRoles = canChangeUserRoles(currentUser?.role);  const roleCounts = {
+  const canChangeRoles = canChangeUserRoles(currentUser?.role);
+
+  const roleCounts = {
     admin: users.filter((u) => u.role === 'admin').length,
     supervisor: users.filter((u) => u.role === 'supervisor').length,
     vendedor: users.filter((u) => u.role === 'vendedor').length,
@@ -330,18 +332,7 @@ export function UsersView({ currentUser }: UsersViewProps) {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-1.5">
-                          {PERMISSIONS[u.role]?.map((p) => (
-                            <span
-                              key={p}
-                              className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400 border border-slate-200/60 dark:border-white/5"
-                            >
-                              {p}
-                            </span>
-                          )) || (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </div>
+                        <PermissionChips role={u.role} onOpen={() => setPermissionsRole(u.role)} />
                       </td>
                       <td className="px-5 py-4 text-center">
                         <button
@@ -362,18 +353,11 @@ export function UsersView({ currentUser }: UsersViewProps) {
         )}
       </div>
 
-      <div className="rounded-3xl p-6 bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow-brand relative overflow-hidden">
-        <Shield className="absolute -right-4 -bottom-4 text-white/5 transform -rotate-12" size={110} />
-        <h3 className="text-lg font-extrabold flex items-center gap-2.5 relative">
-          <Shield className="text-emerald-300" size={20} />
-          Guía de Roles y Permisos
-        </h3>
-        <ul className="text-sm text-brand-100 space-y-1.5 list-disc list-inside mt-3 relative">
-          <li><strong className="text-white">Administrador:</strong> Acceso total a productos, precios de costo, gestión de usuarios, reportes y caja.</li>
-          <li><strong className="text-white">Supervisor:</strong> Control de stock, alertas críticas, reportes y supervisión de ventas.</li>
-          <li><strong className="text-white">Vendedor:</strong> Acceso exclusivo a Caja / POS para registrar ventas y cobrar.</li>
-        </ul>
-      </div>
+      <RolePermissionsMatrix />
+
+      {permissionsRole && (
+        <RolePermissionsModal role={permissionsRole} onClose={() => setPermissionsRole(null)} />
+      )}
 
       {activityUser && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setActivityUser(null)}>

@@ -4,6 +4,7 @@ import type { Profile } from '../../types';
 import { Calculator, Loader2, Printer, Save, Shield } from 'lucide-react';
 import { canCloseCash } from '../../lib/permissions';
 import { fmtMoney } from '../../lib/format';
+import { moneyOrZero, parseMoney } from '../../lib/moneyInput';
 
 interface CloseRow {
   id: string;
@@ -101,11 +102,21 @@ export function CashCloseView({ profile, showToast }: {
     }
   };
 
-  const countedNum = parseFloat(counted) || 0;
+  const countedNum = moneyOrZero(counted);
   const diff = countedNum - stats.cash;
+  const hasCount = counted.trim() !== '';
+  const countValid = !hasCount || Number.isFinite(parseMoney(counted));
 
   const handleSave = async () => {
     if (!canClose) return;
+    if (!hasCount) {
+      notify('Escribí el efectivo contado para guardar el cierre.', 'warning');
+      return;
+    }
+    if (!countValid) {
+      notify('El efectivo contado no es un importe válido.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const { start, end } = dayRange(date);
@@ -140,7 +151,7 @@ export function CashCloseView({ profile, showToast }: {
       notify(`Cierre del ${date} guardado. Diferencia: $${diff.toLocaleString('es-AR')}`, diff === 0 ? 'success' : 'warning');
       fetchDay();
     } catch (e: any) {
-      notify(`Error al guardar: ${e?.message || e}`, 'error');
+      notify(`Error al guardar: ${e?.message || e}${e?.code ? ` (${e.code})` : ''}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -202,13 +213,23 @@ export function CashCloseView({ profile, showToast }: {
 
           <div data-tour="cashclose-count" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
             <div className="grid sm:grid-cols-2 gap-2">
-              <label className="text-[11px] font-bold text-slate-500">Contado real en cajón ($)
+              <label className="text-[11px] font-bold text-slate-500">
+                <span className="flex items-center justify-between gap-2">
+                  <span>Contado real en cajón ($)</span>
+                  <button
+                    type="button"
+                    onClick={() => setCounted(String(stats.cash))}
+                    className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
+                  >
+                    Usar esperado
+                  </button>
+                </span>
                 <input
-                  type="number" min="0" step="any" inputMode="decimal"
+                  type="text" inputMode="decimal" autoComplete="off"
                   value={counted}
                   onChange={(e) => setCounted(e.target.value)}
                   placeholder="0"
-                  className="mt-0.5 w-full px-3 py-2.5 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-lg font-mono font-extrabold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className={`mt-0.5 w-full px-3 py-2.5 border-2 rounded-xl text-lg font-mono font-extrabold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${countValid ? 'border-slate-200 dark:border-[#333333]' : 'border-rose-400'}`}
                 />
               </label>
               <label className="text-[11px] font-bold text-slate-500">Notas
@@ -220,13 +241,13 @@ export function CashCloseView({ profile, showToast }: {
                 />
               </label>
             </div>
-            <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${diff === 0 && counted !== '' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : diff !== 0 && counted !== '' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
-              Diferencia: {counted === '' ? '—' : money(diff)} {counted !== '' && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
+            <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${hasCount && countValid && diff === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : hasCount && diff !== 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
+              Diferencia: {!hasCount ? '—' : !countValid ? 'importe inválido' : money(diff)} {hasCount && countValid && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
             </div>
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={handleSave}
-                disabled={saving || counted === ''}
+                disabled={saving}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

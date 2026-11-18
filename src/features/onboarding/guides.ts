@@ -24,7 +24,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   { id: 'pos', title: 'Caja / POS', desc: 'Buscar, escanear, pesar, carrito, descuentos y cobrar.', level: 'esencial', minutes: 2 },
   { id: 'products', title: 'Productos y stock', desc: 'Alta, precios, márgenes, filtros, importación y exportación.', level: 'esencial', minutes: 2 },
   { id: 'intake', title: 'Ingreso de stock', desc: 'Compras a proveedores: borrador, escaneo y confirmación.', level: 'basico', minutes: 1 },
+  { id: 'purchaseorders', title: 'Órdenes de compra', desc: 'Reposición sugerida por stock y ventas; borrador, envío y recepción.', level: 'basico', minutes: 2 },
   { id: 'history', title: 'Pedidos e historial', desc: 'Filtrar ventas, ver el detalle, reimprimir y anular.', level: 'basico', minutes: 1 },
+  { id: 'activity', title: 'Mi actividad', desc: 'Tus ventas y movimientos de stock, solo lo que hiciste vos.', level: 'basico', minutes: 1 },
   { id: 'cashclose', title: 'Cierre de caja', desc: 'Conteo, diferencias, historial de cierres e impresión.', level: 'avanzado', minutes: 1 },
   { id: 'reports', title: 'Reportes', desc: 'Rentabilidad, categorías y exportación a PDF/Excel.', level: 'avanzado', minutes: 1 },
   { id: 'users', title: 'Usuarios y permisos', desc: 'Roles, permisos granulares y actividad del equipo.', level: 'avanzado', minutes: 1 },
@@ -52,6 +54,13 @@ export const TOUR_STEPS: TourStep[] = [
     body: 'Buscá productos, ventas o clientes desde cualquier pantalla. Atajo: Ctrl+K / ⌘K.',
     placement: 'bottom',
     level: 'esencial',
+  },
+  {
+    selector: '[data-tour="notifications"]',
+    title: 'Notificaciones',
+    body: 'Alertas de stock bajo, vencimientos y ventas pendientes. Tocá una para ir directo a la sección.',
+    placement: 'bottom',
+    level: 'basico',
   },
   {
     selector: '[data-tour="help"]',
@@ -144,9 +153,17 @@ export const TOUR_STEPS: TourStep[] = [
     level: 'esencial',
   },
   {
+    selector: '[data-tour="pos-payment"]',
+    title: 'Medios de pago',
+    body: 'Elegí efectivo, transferencia (banco y comprobante), tarjeta, link de Mercado Pago o terminal Point. El comprobante puede ser interno o ARCA.',
+    placement: 'top',
+    view: 'pos',
+    level: 'esencial',
+  },
+  {
     selector: '[data-tour="pos-totals"]',
     title: 'Cobrar',
-    body: 'Revisá el total y presioná COBRAR (F12). Si no hay conexión, la venta se guarda y se sincroniza sola.',
+    body: 'Revisá el total y presioná COBRAR (F12). Elegí efectivo, transferencia (banco y comprobante), tarjeta, link de Mercado Pago o terminal Point. Sin conexión, la venta se guarda y se sincroniza sola.',
     placement: 'top',
     view: 'pos',
     level: 'esencial',
@@ -204,6 +221,40 @@ export const TOUR_STEPS: TourStep[] = [
     level: 'basico',
   },
 
+  // ── Órdenes de compra ───────────────────────────────────────────
+  {
+    selector: '[data-tour="purchaseorders-header"]',
+    title: 'Generar orden de compra',
+    body: 'La app calcula qué reponer según el stock objetivo y la demanda de ventas. Se crea una orden por proveedor.',
+    placement: 'bottom',
+    view: 'purchaseorders',
+    level: 'basico',
+  },
+  {
+    selector: '[data-tour="purchaseorders-kpis"]',
+    title: 'Estado de tus compras',
+    body: 'Borradores, enviadas, recibidas y el valor pendiente de entrega, todo en un vistazo.',
+    placement: 'bottom',
+    view: 'purchaseorders',
+    level: 'basico',
+  },
+  {
+    selector: '[data-tour="purchaseorders-filters"]',
+    title: 'Filtrar por estado',
+    body: 'Mirá solo borradores, enviadas, recibidas o canceladas para seguir cada compra.',
+    placement: 'bottom',
+    view: 'purchaseorders',
+    level: 'basico',
+  },
+  {
+    selector: '[data-tour="purchaseorders-list"]',
+    title: 'Recibir y comparar costos',
+    body: 'Al recibir, confirmá lo que llegó: la app compara el costo estimado con el real y suma el stock.',
+    placement: 'top',
+    view: 'purchaseorders',
+    level: 'basico',
+  },
+
   // ── Historial ───────────────────────────────────────────────────
   {
     selector: '[data-tour="history-kpis"]',
@@ -227,6 +278,24 @@ export const TOUR_STEPS: TourStep[] = [
     body: 'Expandí una venta para ver ítems, reenviar el comprobante o anular (si tenés permiso).',
     placement: 'top',
     view: 'history',
+    level: 'basico',
+  },
+
+  // ── Mi actividad ────────────────────────────────────────────────
+  {
+    selector: '[data-tour="activity-sales"]',
+    title: 'Tus ventas',
+    body: 'Solo las ventas que registraste vos, con fecha, medio de pago y total. Ideal para controlar tu turno.',
+    placement: 'bottom',
+    view: 'activity',
+    level: 'basico',
+  },
+  {
+    selector: '[data-tour="activity-moves"]',
+    title: 'Tus movimientos de stock',
+    body: 'Altas, ajustes y transferencias que hiciste, con el stock antes y después de cada movimiento.',
+    placement: 'top',
+    view: 'activity',
     level: 'basico',
   },
 
@@ -286,7 +355,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="users-list"]',
     title: 'Equipo',
-    body: 'Cada usuario tiene un rol y permisos. Tocá uno para ver su actividad y ajustar accesos.',
+    body: 'Cada usuario tiene un rol y permisos. Tocá los chips de permisos para ver la matriz completa y la actividad del equipo.',
     placement: 'top',
     view: 'users',
     level: 'avanzado',
@@ -304,8 +373,16 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="settings-mp"]',
     title: 'Mercado Pago',
-    body: 'Configurá el modo prueba o producción para cobrar con QR y link de pago.',
+    body: 'Configurá el modo prueba o producción para cobrar con QR, link de pago y terminal Point.',
     placement: 'bottom',
+    view: 'settings',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="settings-point"]',
+    title: 'Terminal Point',
+    body: 'Conectá una terminal Mercado Pago Point. Al cobrar, el POS envía la orden y la venta queda pendiente hasta que MP la apruebe.',
+    placement: 'top',
     view: 'settings',
     level: 'avanzado',
   },

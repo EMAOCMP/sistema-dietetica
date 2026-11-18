@@ -151,7 +151,7 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
   };
 
   return (
-    <div className="relative">
+    <div data-tour="notifications" className="relative">
       <button
         onClick={() => { setOpen((o) => !o); if (!open) refresh(); }}
         className="relative p-2 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer dark:text-zinc-400 dark:hover:text-white dark:hover:bg-white/5"

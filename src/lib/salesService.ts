@@ -51,6 +51,7 @@ export function buildSalePayload(args: {
     customer_name: customer.name || 'Cliente General',
     customer_doc: customer.doc.replace(/\D/g, '') || null,
     customer_iva_cond: customer.ivaCond,
+    customer_phone: customer.phone.replace(/\D/g, '') || null,
     sale_type: config.saleType,
     receipt_number: receiptNumber,
     total_amount: config.totalAmount,
@@ -132,7 +133,7 @@ export async function executeSale(args: {
   }
 
   if (!usedRpc) {
-    const directPayload: Record<string, unknown> = { ...payload, receipt_number: receiptNumber };
+    const directPayload: Record<string, unknown> = { ...payload, receipt_number: receiptNumber, idempotency_key: opKey };
     const res = await supabase.from('sales').insert(directPayload).select().single();
     saleData = res.data;
     let saleError = res.error;
@@ -141,6 +142,7 @@ export async function executeSale(args: {
       // Schema viejo: eliminar columnas que no existen y reintentar
       for (const col of [
         'payment_method', 'dispatch_type', 'status', 'customer_doc', 'customer_iva_cond',
+        'customer_phone', 'idempotency_key',
         'net_amount', 'iva_amount', 'receipt_number', 'transfer_bank', 'transfer_account',
         'transfer_ref', 'card_type', 'card_brand', 'card_last4', 'card_auth', 'card_installments',
       ]) delete directPayload[col];
@@ -172,13 +174,21 @@ export async function executeSale(args: {
       }
       if (itemError) throw itemError;
 
-      await supabase.rpc('adjust_stock', {
+      const { error: stockError } = await supabase.rpc('adjust_stock', {
         p_product_id: item.product.id,
         p_quantity: -item.quantity,
         p_reference_type: 'sale',
         p_reference_id: String(saleData.id),
         p_reason: `Venta #${String(saleData.id).slice(0, 8)} (${paymentMethod} - ${config.dispatchType})`,
       });
+      if (stockError) {
+        // La venta ya está creada: no se puede revertir acá. Antes el error se
+        // descartaba y el stock quedaba sin descontar sin que nadie se enterara.
+        console.error(
+          `Venta ${saleData.id}: no se pudo descontar stock de ${item.product.name}:`,
+          stockError.message,
+        );
+      }
     }
   }
 
@@ -187,11 +197,37 @@ export async function executeSale(args: {
     await persistSaleDiscounts(saleData!.id, cart, config.discountAmount || 0);
   }
 
+  // Teléfono del cliente (best-effort): el RPC create_sale lo recibe pero
+  // algunas versiones desplegadas no lo guardan. set_sale_phone() cubre eso.
+  await persistSalePhone(saleData!.id, customer.phone);
+
   return {
     saleId: saleData!.id,
     receiptNumber: saleData!.receipt_number || (payload.receipt_number as string | null) || null,
     usedRpc,
   };
+}
+
+/**
+ * Guarda el teléfono del cliente en la venta (best-effort).
+ * Usa el RPC `set_sale_phone` (SECURITY DEFINER: el vendedor puede tocar su
+ * propia venta aunque la política de UPDATE sea solo admin/supervisor).
+ * Si el SQL no está aplicado, intenta un update directo y, si tampoco hay
+ * permiso, no rompe la venta.
+ */
+export async function persistSalePhone(saleId: string, phone?: string | null) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return;
+  try {
+    const { error } = await supabase.rpc('set_sale_phone', {
+      p_sale_id: saleId,
+      p_phone: digits,
+    });
+    if (!error) return;
+    // Función ausente (SQL sin correr): probar update directo.
+    if (!/function|schema cache|does not exist|PGRST202/i.test(error.message || '')) return;
+    await supabase.from('sales').update({ customer_phone: digits }).eq('id', saleId);
+  } catch { /* esquema viejo o sin red: noop */ }
 }
 
 /**

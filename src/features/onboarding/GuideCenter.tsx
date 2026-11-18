@@ -2,9 +2,11 @@ import { useState } from 'react';
 import {
   Compass, Sparkles, Play, CheckCircle2, ChevronDown, ChevronRight, RotateCcw,
   LayoutDashboard, ShoppingCart, Package, PackagePlus, History,
-  Wallet, BarChart3, Users, Settings, BookOpen, Clock,
+  Wallet, BarChart3, Users, Settings, BookOpen, Clock, Truck, Activity,
 } from 'lucide-react';
 import { ModalShell } from '../../components/ui/ModalShell';
+import type { UserRole } from '../../types';
+import { canAccessTab } from '../../lib/permissions';
 import { useOnboarding } from './OnboardingProvider';
 import { GUIDE_SECTIONS, guideSteps, type GuideSection } from './guides';
 
@@ -13,7 +15,9 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   pos: ShoppingCart,
   products: Package,
   intake: PackagePlus,
+  purchaseorders: Truck,
   history: History,
+  activity: Activity,
   cashclose: Wallet,
   reports: BarChart3,
   users: Users,
@@ -86,25 +90,27 @@ function SectionRow({ section, done, onStart }: { section: GuideSection; done: b
 /**
  * Centro de guías: índice de todas las secciones con progreso persistente.
  * Aplica divulgación progresiva: lo avanzado arranca colapsado.
+ * Solo lista las secciones que el rol puede abrir.
  */
-export function GuideCenter() {
+export function GuideCenter({ role }: { role?: UserRole | null }) {
   const { guideOpen } = useOnboarding();
   if (!guideOpen) return null;
-  return <GuideCenterContent />;
+  return <GuideCenterContent role={role} />;
 }
 
-function GuideCenterContent() {
+function GuideCenterContent({ role }: { role?: UserRole | null }) {
   const { closeGuide, startTour, isChapterDone, resetProgress } = useOnboarding();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const basic = GUIDE_SECTIONS.filter((s) => s.level !== 'avanzado');
-  const advanced = GUIDE_SECTIONS.filter((s) => s.level === 'avanzado');
-  const doneCount = GUIDE_SECTIONS.filter((s) => isChapterDone(s.id)).length;
+  const sections = GUIDE_SECTIONS.filter((s) => canAccessTab(role, s.id));
+  const basic = sections.filter((s) => s.level !== 'avanzado');
+  const advanced = sections.filter((s) => s.level === 'avanzado');
+  const doneCount = sections.filter((s) => isChapterDone(s.id)).length;
   const basicDone = basic.filter((s) => isChapterDone(s.id)).length;
   const advancedDone = advanced.filter((s) => isChapterDone(s.id)).length;
-  const pct = Math.round((doneCount / GUIDE_SECTIONS.length) * 100);
-  const totalMinutes = GUIDE_SECTIONS.reduce((acc, s) => acc + s.minutes, 0);
+  const pct = sections.length ? Math.round((doneCount / sections.length) * 100) : 0;
+  const totalMinutes = sections.reduce((acc, s) => acc + s.minutes, 0);
 
   return (
     <ModalShell
@@ -161,10 +167,10 @@ function GuideCenterContent() {
                 <Sparkles size={15} className="text-brand-500 shrink-0" /> Aprendé la app paso a paso
               </p>
               <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                {GUIDE_SECTIONS.length} guías cortas · ~{totalMinutes} min en total. El progreso se guarda solo.
+                {sections.length} guías cortas · ~{totalMinutes} min en total. El progreso se guarda solo.
               </p>
               <p className="mt-2 text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                {doneCount} de {GUIDE_SECTIONS.length} completadas
+                {doneCount} de {sections.length} completadas
               </p>
             </div>
             <ProgressRing pct={pct} />

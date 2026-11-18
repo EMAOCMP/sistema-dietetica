@@ -15,6 +15,8 @@ interface RoundedSelectProps {
   menuAlign?: 'left' | 'right';
   /** Si es false, el menú nunca se abre hacia arriba (siempre hacia abajo). */
   flip?: boolean;
+  /** Texto fijo en el botón (ej. "Orden"); si falta, muestra la opción elegida. */
+  buttonLabel?: string;
 }
 
 /**
@@ -22,7 +24,7 @@ interface RoundedSelectProps {
  * Menú renderizado via Portal en document.body para que no se corte
  * con overflow ni stacking context de modales (backdrop-filter, etc).
  */
-export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign = 'left', flip = true }: RoundedSelectProps) {
+export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign = 'left', flip = true, buttonLabel }: RoundedSelectProps) {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 170 });
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -101,7 +103,7 @@ export function RoundedSelect({ value, onChange, options, size = 'md', menuAlign
         onClick={() => setOpen((o) => !o)}
         className={`w-full flex items-center justify-between gap-2 border-2 rounded-2xl font-bold bg-white transition cursor-pointer dark:bg-obsidian-800 dark:text-white ${btnPad} ${open ? 'border-brand-500' : 'border-[#e2e8f0] hover:border-slate-300 dark:border-white/10'}`}
       >
-        <span className="truncate text-slate-800 dark:text-white">{selected?.label}</span>
+        <span className="truncate text-slate-800 dark:text-white">{buttonLabel ?? selected?.label}</span>
         <CaretDown size={14} weight="bold" className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {menu}

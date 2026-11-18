@@ -43,8 +43,14 @@ export const canChangeRoles = (role: string | null | undefined) => isAdmin(role)
 /** Configuración del negocio y ubicaciones de stock. */
 export const canManageSettings = (role: string | null | undefined) => isManager(role);
 
-/** Dar de baja / reactivar productos (RLS products_delete: solo admin). */
+/** Dar de baja / reactivar productos (la UI lo reserva al admin). */
 export const canDeactivateProducts = (role: string | null | undefined) => isAdmin(role);
+
+/** Borrar productos definitivamente (RLS products_delete: solo admin). */
+export const canDeleteProducts = (role: string | null | undefined) => isAdmin(role);
+
+/** Crear / editar / borrar ubicaciones de stock (RLS locations_write: solo admin). */
+export const canManageLocations = (role: string | null | undefined) => isAdmin(role);
 
 /** Anular ventas (RPC cancel_sale: admin + supervisor). */
 export const canAnnulSales = (role: string | null | undefined) => isManager(role);
@@ -54,3 +60,22 @@ export const canCancelIntake = (role: string | null | undefined) => isManager(ro
 
 /** Transferir stock entre ubicaciones (RPC transfer_stock: cualquier autenticado). */
 export const canTransferStock = (role: string | null | undefined) => hasRole(role, ALL_ROLES);
+
+/**
+ * Guardas por pestaña: espejo exacto de lo que se muestra en la navegación
+ * (`Navbar` y `MobileTabBar`). Una pestaña sin guarda está disponible para
+ * cualquier rol válido.
+ */
+const TAB_GUARDS: Record<string, (role: string | null | undefined) => boolean> = {
+  cashclose: canCloseCash,
+  reports: canViewReports,
+  users: canViewUsers,
+  settings: canManageSettings,
+};
+
+/** ¿El rol puede abrir esta pestaña? Privilegio mínimo: rol desconocido = false. */
+export function canAccessTab(role: string | null | undefined, tab: string): boolean {
+  if (!hasRole(role, ALL_ROLES)) return false;
+  const guard = TAB_GUARDS[tab];
+  return guard ? guard(role) : true;
+}

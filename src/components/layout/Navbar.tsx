@@ -77,6 +77,7 @@ export function Navbar({
     { id: 'pos', label: 'Venta Rápida (POS)', icon: ShoppingCart },
     { id: 'products', label: 'Productos / Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, badgeColor: 'red' as const },
     { id: 'intake', label: 'Ingreso Mercadería', icon: Truck },
+    { id: 'purchaseorders', label: 'Ordenes de Compra', icon: Truck },
     { id: 'history', label: 'Pedidos & Historial', icon: ClockCounterClockwise },
     { id: 'activity', label: 'Mi actividad', icon: ChartLine },
     ...(canCloseCash(profile?.role) ? [{ id: 'cashclose', label: 'Cierre de Caja', icon: Calculator }] : []),

@@ -204,11 +204,12 @@ BEGIN
 
   -- Cabecera (solo columnas núcleo; el detalle vive en payments)
   INSERT INTO sales (
-    user_id, customer_name, customer_doc, customer_iva_cond,
+    user_id, customer_name, customer_doc, customer_iva_cond, customer_phone,
     sale_type, total_amount, net_amount, iva_amount, profit_amount,
     payment_method, dispatch_type, notes, status
   ) VALUES (
     auth.uid(), p_customer_name, p_customer_doc, p_customer_iva_cond,
+    NULLIF(regexp_replace(COALESCE(p_customer_phone, ''), '\D', '', 'g'), ''),
     p_sale_type, p_total_amount, p_net_amount, p_iva_amount, p_profit_amount,
     COALESCE(p_payment->>'method','cash'), p_dispatch_type, p_notes, 'completed'
   ) RETURNING id INTO v_sale_id;

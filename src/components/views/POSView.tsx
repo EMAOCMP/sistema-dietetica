@@ -698,7 +698,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
     { dispatchType, deliveryFeeType, deliveryFeeValue }
   );
 
-  const cashGivenNum = parseFloat(cashGiven) || 0;
+  const cashGivenNum = cartSvc.parseAmount(cashGiven);
   const changeDue = cashGivenNum > totalAmount ? cashGivenNum - totalAmount : 0;
 
   const handleBarcodeScanned = (barcode: string) => {
@@ -886,7 +886,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
           rawSubtotal,
           discountVal,
           discountType,
-          discountValue: parseFloat(discountValue) || 0,
+          discountValue: cartSvc.parseAmount(discountValue),
           deliveryFee,
           deliveryFeeType,
           totalAmount,
@@ -1004,7 +1004,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
         rawSubtotal,
         discountVal,
         discountType,
-        discountValue: parseFloat(discountValue) || 0,
+        discountValue: cartSvc.parseAmount(discountValue),
         deliveryFee,
         deliveryFeeType,
         totalAmount,
@@ -1578,7 +1578,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2">
+            <div data-tour="pos-payment" className="grid grid-cols-3 gap-2">
               <div>
                 <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wide mb-1">Comprobante</label>
                 <RoundedSelect size="sm" value={saleType} onChange={(v) => setSaleType(v as 'internal' | 'afip')} options={[{ value: 'internal', label: 'Interno' }, { value: 'afip', label: 'ARCA' }]} />

@@ -13,6 +13,7 @@ import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar, Ques
 import { Plus, Check } from 'lucide-react';
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine';
 import { clearOfflineData } from './lib/offlineDB';
+import { canAccessTab } from './lib/permissions';
 import { ScannerProvider } from './features/scanner/ScannerProvider';
 import { OnboardingProvider, ProductTour, GuideCenter, SectionHint, useOnboarding, hasCompletedTour, CHECKLIST_SECTIONS } from './features/onboarding';
 
@@ -69,6 +70,7 @@ const ProductsView = lazy(() => import('./components/views/ProductsView').then(m
 const HistoryView = lazy(() => import('./components/views/HistoryView').then(m => ({ default: m.HistoryView })));
 const UsersView = lazy(() => import('./components/views/UsersView').then(m => ({ default: m.UsersView })));
 const StockIntakeView = lazy(() => import('./components/views/StockIntakeView').then(m => ({ default: m.StockIntakeView })));
+const PurchaseOrdersView = lazy(() => import('./components/views/PurchaseOrdersView').then(m => ({ default: m.PurchaseOrdersView })));
 const MyActivityView = lazy(() => import('./components/views/MyActivityView').then(m => ({ default: m.MyActivityView })));
 const SettingsView = lazy(() => import('./components/views/SettingsView').then(m => ({ default: m.SettingsView })));
 const CashCloseView = lazy(() => import('./components/views/CashCloseView').then(m => ({ default: m.CashCloseView })));
@@ -154,6 +156,17 @@ export function App() {
       kind === 'warning' || kind === 'error' ? 6000 : 3500
     );
   };
+
+  // Guard central de navegación: si la pestaña activa no está permitida para el
+  // rol (paleta de comandos, notificación o estado viejo), vuelve al panel.
+  // Es defensa en profundidad: cada vista ya valida por su cuenta.
+  useEffect(() => {
+    if (!profile?.role) return;
+    if (canAccessTab(profile.role, activeTab)) return;
+    setActiveTab('dashboard');
+    showToast('No tenés permiso para acceder a esa sección.', 'warning');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, profile]);
 
   const fetchProfile = async (user: any) => {
     try {
@@ -287,6 +300,7 @@ export function App() {
         onNavigate={goToSearch}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
         dark={theme === 'dark'}
+        role={profile?.role}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -379,9 +393,14 @@ export function App() {
                 <StockIntakeView showToast={showToast} profile={profile} />
               </Suspense>
             )}
+            {activeTab === 'purchaseorders' && (
+              <Suspense fallback={<div className='p-8 text-center text-slate-500 animate-pulse'>Cargando ordenes...</div>}>
+                <PurchaseOrdersView showToast={showToast} profile={profile} setActiveTab={setActiveTab} />
+              </Suspense>
+            )}
             {activeTab === 'history' && (
               <Suspense fallback={<div className="p-8 text-center text-slate-500 animate-pulse">Cargando historial…</div>}>
-                <HistoryView />
+                <HistoryView profile={profile} />
               </Suspense>
             )}
             {activeTab === 'users' && (
@@ -447,7 +466,7 @@ export function App() {
     </div>
     </ScannerProvider>
     <ProductTour activeTab={activeTab} onNavigate={goTo} />
-    <GuideCenter />
+    <GuideCenter role={profile?.role} />
     <SectionHint />
     <SectionHintTrigger activeTab={activeTab} />
     <VisitedMarker activeTab={activeTab} />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Product } from '../../types';
 import { Scale, DollarSign, X, Check } from 'lucide-react';
+import { moneyOrZero } from '../../lib/moneyInput';
 
 interface ScaleModalProps {
   product: Product | null;
@@ -25,7 +26,7 @@ export function ScaleModal({ product, priceType, isOpen, onClose, onConfirm }: S
   const totalFromWeight = Math.round(kgFromGrams * unitPrice);
 
   // Money mode calculation
-  const moneyNum = parseFloat(money) || 0;
+  const moneyNum = moneyOrZero(money);
   const kgFromMoney = unitPrice > 0 ? moneyNum / unitPrice : 0;
   const gramsFromMoney = Math.round(kgFromMoney * 1000);
 

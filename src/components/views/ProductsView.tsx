@@ -11,6 +11,7 @@ import { downloadCsv, stampName } from '../../lib/exportCsv';
 import { RoundedSelect } from '../ui/RoundedSelect';
 import { ActionDropdown } from '../ui/ActionDropdown';
 import { canDeactivateProducts } from '../../lib/permissions';
+import { moneyOrZero } from '../../lib/moneyInput';
 
 const daysToExpiry = (p: Product): number | null => {
   if (!p.expiry_date) return null;
@@ -201,6 +202,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
   const [newSupplierPhone, setNewSupplierPhone] = useState('');
+  const [newSupplierLead, setNewSupplierLead] = useState('7');
 
   // Historial de precios
   const [priceHistProduct, setPriceHistProduct] = useState<Product | null>(null);
@@ -349,13 +351,13 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
 
   // Auto-calcular precios
   const handleAutoCalc = () => {
-    const cost = parseFloat(costPrice) || 0;
+    const cost = moneyOrZero(costPrice);
     const margin = parseFloat(autoMargin) || 0;
     if (cost <= 0 || margin <= 0 || margin >= 100) return;
     const price = Math.round((cost / (1 - margin / 100)) * 100) / 100;
     if (autoCalcField === 'wholesale') {
       setWholesalePrice(price.toString());
-      if (parseFloat(retailPrice) < price) setRetailPrice(price.toString());
+      if (moneyOrZero(retailPrice) < price) setRetailPrice(price.toString());
     } else {
       setRetailPrice(price.toString());
     }
@@ -544,8 +546,8 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   };
 
   const liveMargin = (price: string) => {
-    const cost = parseFloat(costPrice) || 0;
-    const sell = parseFloat(price) || 0;
+    const cost = moneyOrZero(costPrice);
+    const sell = moneyOrZero(price);
     if (sell <= 0) return null;
     return (((sell - cost) / sell) * 100).toFixed(1);
   };
@@ -578,9 +580,10 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           }
         } catch { /* tabla puede no existir todavía */ }
         }
-      const cost = parseFloat(costPrice) || 0;
-      const whole = parseFloat(wholesalePrice) || 0;
-      const retail = parseFloat(retailPrice) || 0;
+      const cost = moneyOrZero(costPrice);
+      const whole = moneyOrZero(wholesalePrice);
+      const retail = moneyOrZero(retailPrice);
+      const stockInput = Math.round((parseFloat(stockQuantity) || 0) * 100) / 100;
       if ((whole > 0 && whole < cost) || (retail > 0 && retail < cost)) {
         if (!(await askConfirm('Atención: un precio quedó POR DEBAJO del costo (venta a pérdida). ¿Guardar igual?'))) return;
       }
@@ -589,16 +592,18 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
         name: name.trim(),
         category: category,
         unit_type: unitType,
-        cost_price: parseFloat(costPrice) || 0,
-        wholesale_price: parseFloat(wholesalePrice) || 0,
-        retail_price: parseFloat(retailPrice) || 0,
-        stock_quantity: parseFloat(stockQuantity) || 0,
+        cost_price: moneyOrZero(costPrice),
+        wholesale_price: moneyOrZero(wholesalePrice),
+        retail_price: moneyOrZero(retailPrice),
         min_stock: parseFloat(minStock) || 5,
         expiry_date: expiryDate || null,
         supplier_id: supplierId || null,
         image_url: imageUrl.trim() || null,
         is_active: true,
       };
+      // El stock no se escribe directo en `products` (es derivado de inventory).
+      // En el alta arranca en 0 y se carga con adjust_stock después de guardar.
+      if (!editingProduct) productData.stock_quantity = 0;
 
       const saveWithFallback = async () => {
         try {
@@ -632,10 +637,11 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       if (!navigator.onLine) {
         const { enqueueProductCreate, enqueueProductUpdate } = await import('../../lib/offlineDB');
         if (editingProduct) {
-          await enqueueProductUpdate({ id: editingProduct.id, ...productData }, profile?.id || null);
-          setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? { ...p, ...productData } : p)));
+          // El stock viaja aparte para que el replay lo aplique con adjust_stock.
+          await enqueueProductUpdate({ id: editingProduct.id, ...productData, stock_quantity: stockInput }, profile?.id || null);
+          setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? { ...p, ...productData, stock_quantity: stockInput } : p)));
         } else {
-          await enqueueProductCreate(productData, profile?.id || null);
+          await enqueueProductCreate({ ...productData, stock_quantity: stockInput }, profile?.id || null);
         }
         setModalOpen(false);
         notify('Sin conexión: producto encolado, se sincronizará solo.', 'success');
@@ -643,6 +649,31 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       }
 
       const savedId = await saveWithFallback();
+
+      // El stock se aplica como movimiento real de inventario: en el alta es el
+      // stock inicial; en la edición, solo la diferencia contra el stock actual.
+      if (savedId) {
+        let currentStock = 0;
+        if (editingProduct) {
+          const { data: inv } = await supabase
+            .from('inventory')
+            .select('quantity')
+            .eq('product_id', savedId);
+          currentStock = (inv || []).reduce((a: number, r: any) => a + Number(r.quantity || 0), 0);
+        }
+        const diff = Math.round((stockInput - currentStock) * 100) / 100;
+        if (diff !== 0) {
+          const { error: stockError } = await supabase.rpc('adjust_stock', {
+            p_product_id: savedId,
+            p_quantity: diff,
+            p_reason: editingProduct ? 'Ajuste desde edición de producto' : 'Stock inicial',
+            p_reference_type: editingProduct ? 'adjustment' : 'import',
+          });
+          if (stockError) {
+            notify('Producto guardado, pero el stock no se pudo ajustar: ' + stockError.message, 'error');
+          }
+        }
+      }
 
       // P4: registrar/sincronizar el código en product_barcodes (servicio central)
       if (savedId) {
@@ -805,15 +836,41 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     setMergingId(keeperId);
     try {
       const otherIds = others.map((p) => p.id);
-      const totalStock = Math.round((Number(keeper.stock_quantity) + others.reduce((a, p) => a + Number(p.stock_quantity), 0)) * 100) / 100;
+      // El stock se mueve con movimientos reales: se lee de `inventory` (fuente
+      // de verdad), no de products.stock_quantity, y se transfiere al que queda.
+      const { data: invRows, error: invError } = await supabase
+        .from('inventory')
+        .select('product_id, quantity')
+        .in('product_id', [keeperId, ...otherIds]);
+      if (invError) throw invError;
+      const stockByProduct = new Map<string, number>();
+      (invRows || []).forEach((r: any) => {
+        stockByProduct.set(r.product_id, (stockByProduct.get(r.product_id) || 0) + Number(r.quantity || 0));
+      });
+
       const { error: itemsError } = await supabase.from('sale_items').update({ product_id: keeperId }).in('product_id', otherIds);
       if (itemsError) throw itemsError;
       try {
-        await supabase.from('stock_movements').update({ product_id: keeperId }).in('product_id', otherIds);
         await supabase.from('product_price_history').update({ product_id: keeperId }).in('product_id', otherIds);
-      } catch { /* historiales opcionales */ }
-      const { error: stockError } = await supabase.from('products').update({ stock_quantity: totalStock }).eq('id', keeperId);
-      if (stockError) throw stockError;
+      } catch { /* historial opcional */ }
+
+      for (const other of others) {
+        const qty = Math.round((stockByProduct.get(other.id) || 0) * 100) / 100;
+        if (qty <= 0) continue;
+        const { error: outError } = await supabase.rpc('adjust_stock', {
+          p_product_id: other.id,
+          p_quantity: -qty,
+          p_reason: `Fusión de duplicados: stock transferido a ${keeper.name}`,
+        });
+        if (outError) throw outError;
+        const { error: inError } = await supabase.rpc('adjust_stock', {
+          p_product_id: keeperId,
+          p_quantity: qty,
+          p_reason: `Fusión de duplicados: stock recibido de ${other.name}`,
+        });
+        if (inError) throw inError;
+      }
+
       const { error: offError } = await supabase.from('products').update({ is_active: false }).in('id', otherIds);
       if (offError) throw offError;
       setDupesOpen(false);
@@ -890,21 +947,22 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       notify('Ingresá una cantidad mayor a 0.', 'warning');
       return;
     }
-    const signed = adjustMode === 'in' ? qty : -qty;
+    const signed = Math.round((adjustMode === 'in' ? qty : -qty) * 100) / 100;
     const reasonLabel = ADJUST_REASONS.find((r) => r.value === adjustReason)?.label || adjustReason;
+    const reason = `${adjustMode === 'in' ? 'Entrada' : 'Salida'}: ${reasonLabel}`;
     setSavingAdjust(true);
     try {
-      const newStock = Math.round((Number(adjustProduct.stock_quantity) + signed) * 100) / 100;
-      if (newStock < 0) {
-        notify('El stock no puede quedar negativo.', 'warning');
-        return;
-      }
       if (!navigator.onLine) {
+        const newStock = Math.round((Number(adjustProduct.stock_quantity) + signed) * 100) / 100;
+        if (newStock < 0) {
+          notify('El stock no puede quedar negativo.', 'warning');
+          return;
+        }
         const { enqueueStockAdjustment } = await import('../../lib/offlineDB');
         await enqueueStockAdjustment({
           product_id: adjustProduct.id,
           quantity_change: signed,
-          reason: `${adjustMode === 'in' ? 'Entrada' : 'Salida'}: ${reasonLabel}`,
+          reason,
         }, profile?.id || null);
         setProducts((prev) => prev.map((p) => (p.id === adjustProduct.id ? { ...p, stock_quantity: newStock } : p)));
         setAdjustProduct(null);
@@ -912,21 +970,20 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
         notify('Sin conexión: ajuste encolado, se sincronizará solo.', 'success');
         return;
       }
-      const { error: stockError } = await supabase
-        .from('products')
-        .update({ stock_quantity: newStock })
-        .eq('id', adjustProduct.id);
-      if (stockError) throw stockError;
-      const { error: movError } = await supabase.from('stock_movements').insert({
-        product_id: adjustProduct.id,
-        type: 'adjustment',
-        quantity: signed,
-        notes: `${adjustMode === 'in' ? 'Entrada' : 'Salida'}: ${reasonLabel} (${signed > 0 ? '+' : ''}${signed})`,
+      // Todo ajuste pasa por adjust_stock: actualiza `inventory` (la fuente de
+      // verdad), deja el movimiento en `inventory_movements` y el trigger
+      // recalcula `products.stock_quantity`. Escribirlo directo desincronizaba
+      // el stock que usan las ventas.
+      const { error } = await supabase.rpc('adjust_stock', {
+        p_product_id: adjustProduct.id,
+        p_quantity: signed,
+        p_reason: reason,
       });
-      if (movError) throw movError;
+      if (error) throw error;
       setAdjustProduct(null);
       setAdjustQty('');
       fetchProducts();
+      notify(`Stock ${adjustMode === 'in' ? 'sumado' : 'descontado'}: ${qty}.`, 'success');
     } catch (err: any) {
       notify('Error al ajustar stock: ' + err.message, 'error');
     } finally {
@@ -948,7 +1005,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       // Modelo nuevo con autor
       const { data, error } = await supabase
         .from('inventory_movements')
-        .select('id, type, quantity, previous_quantity, new_quantity, reference_type, user_id, created_at')
+        .select('id, type, quantity, previous_quantity, new_quantity, reference_type, user_id, created_at, notes')
         .eq('product_id', product.id)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -959,7 +1016,12 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           id: m.id,
           type: m.type,
           quantity: Number(m.quantity),
-          notes: `${MOVE_LABELS[m.type] || m.type}${m.reference_type ? ` · ${m.reference_type}` : ''}${m.previous_quantity != null && m.new_quantity != null ? ` (${m.previous_quantity} → ${m.new_quantity})` : ''}`,
+          // El motivo (notes) es lo más útil; si falta, se muestra el origen.
+          notes: [
+            MOVE_LABELS[m.type] || m.type,
+            m.notes || m.reference_type,
+            m.previous_quantity != null && m.new_quantity != null ? `${m.previous_quantity} → ${m.new_quantity}` : null,
+          ].filter(Boolean).join(' · '),
           created_at: m.created_at,
           user_name: (m.user_id && names[m.user_id]) || null,
         })));
@@ -1099,29 +1161,63 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       notify('Cargá al menos una cantidad contada.', 'warning');
       return;
     }
+    if (diffs.some((d) => d.counted < 0)) {
+      notify('Las cantidades contadas no pueden ser negativas.', 'warning');
+      return;
+    }
     if (!(await askConfirm(`¿Aplicar ${diffs.length} ajustes de conteo físico?`))) return;
     setSavingCount(true);
     try {
-      for (const d of diffs) {
-        const diff = Math.round((d.counted - Number(d.product.stock_quantity)) * 100) / 100;
-        if (diff === 0) continue;
-        const { error: stockError } = await supabase
-          .from('products')
-          .update({ stock_quantity: d.counted })
-          .eq('id', d.product.id);
-        if (stockError) throw stockError;
-        await supabase.from('stock_movements').insert({
-          product_id: d.product.id,
-          type: 'adjustment',
-          quantity: diff,
-          notes: `Conteo físico: sistema ${d.product.stock_quantity} → contado ${d.counted}`,
+      // El sistema de referencia es `inventory` (puede haber más de una
+      // ubicación). `products.stock_quantity` es derivado y puede venir atrasado,
+      // así que la diferencia se calcula contra el stock real.
+      const ids = diffs.map((d) => d.product.id);
+      const systemByProduct = new Map<string, number>();
+      // Por lotes: un conteo grande no entra en una sola URL de PostgREST.
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data: invRows, error: invError } = await supabase
+          .from('inventory')
+          .select('product_id, quantity')
+          .in('product_id', ids.slice(i, i + 100));
+        if (invError) throw invError;
+        (invRows || []).forEach((r: any) => {
+          systemByProduct.set(r.product_id, (systemByProduct.get(r.product_id) || 0) + Number(r.quantity || 0));
         });
+      }
+
+      let applied = 0;
+      const failures: string[] = [];
+      for (const d of diffs) {
+        const system = systemByProduct.has(d.product.id)
+          ? Number(systemByProduct.get(d.product.id))
+          : Number(d.product.stock_quantity || 0);
+        const diff = Math.round((d.counted - system) * 100) / 100;
+        if (diff === 0) continue;
+        const { error } = await supabase.rpc('adjust_stock', {
+          p_product_id: d.product.id,
+          p_quantity: diff,
+          p_reason: `Conteo físico: sistema ${system} → contado ${d.counted}`,
+        });
+        if (error) {
+          failures.push(`${d.product.name}: ${error.message}`);
+          continue;
+        }
+        applied++;
       }
       setCountOpen(false);
       setCountLines([]);
       setCountSearch('');
       fetchProducts();
-      notify('Conteo aplicado correctamente.', 'success');
+      if (failures.length > 0) {
+        notify(`Conteo aplicado en ${applied} producto(s). Fallaron ${failures.length}: ${failures[0]}`, 'error');
+      } else {
+        notify(
+          applied === 0
+            ? 'El conteo coincide con el sistema: no hubo ajustes.'
+            : `Conteo aplicado en ${applied} producto(s).`,
+          'success'
+        );
+      }
     } catch (err: any) {
       notify('Error al aplicar conteo: ' + err.message, 'error');
     } finally {
@@ -1174,6 +1270,9 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     }
     setImporting(true);
     try {
+      // El stock inicial no se escribe directo en `products`: se carga como
+      // movimiento de inventario con adjust_stock, para que `inventory` y
+      // `products.stock_quantity` queden sincronizados desde el arranque.
       const payload = valid.map((r) => ({
         name: r.nombre,
         barcode: r.codigo || null,
@@ -1182,20 +1281,71 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
         cost_price: Number((r.costo || '0').replace(',', '.')) || 0,
         wholesale_price: Number((r.mayorista || '0').replace(',', '.')) || 0,
         retail_price: Number((r.minorista || '0').replace(',', '.')) || 0,
-        stock_quantity: Number((r.stock || '0').replace(',', '.')) || 0,
+        stock_quantity: 0,
         min_stock: Number((r.minimo || '5').replace(',', '.')) || 5,
         is_active: true,
       }));
-      const { error } = await supabase.from('products').insert(payload);
+      // PostgREST devuelve las filas en el orden del arreglo insertado.
+      const { data: inserted, error } = await supabase.from('products').insert(payload).select('id');
       if (error) throw error;
+      const ids = (inserted || []).map((r: any) => r.id);
+
+      let conStock = 0;
+      const failures: string[] = [];
+      for (let i = 0; i < valid.length; i++) {
+        const stock = Number((valid[i].stock || '0').replace(',', '.')) || 0;
+        if (stock <= 0 || !ids[i]) continue;
+        const { error: stockError } = await supabase.rpc('adjust_stock', {
+          p_product_id: ids[i],
+          p_quantity: stock,
+          p_reason: 'Importación: stock inicial',
+          p_reference_type: 'import',
+        });
+        if (stockError) {
+          failures.push(`${valid[i].nombre}: ${stockError.message}`);
+          continue;
+        }
+        conStock++;
+      }
+
       setImportOpen(false);
       setImportRows([]);
       fetchProducts();
-      notify(`${valid.length} productos importados.`, 'success');
+      if (failures.length > 0) {
+        notify(
+          `${valid.length} productos importados. El stock inicial falló en ${failures.length}: ${failures[0]}`,
+          'error'
+        );
+      } else {
+        notify(
+          `${valid.length} productos importados${conStock > 0 ? ` (${conStock} con stock inicial)` : ''}.`,
+          'success'
+        );
+      }
     } catch (err: any) {
       notify('Error al importar: ' + err.message, 'error');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const clampLead = (v: unknown, fallback = 7) => {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(Math.max(n, 1), 180);
+  };
+
+  // Días de entrega: se usa en el mínimo de alerta y en la urgencia de la orden.
+  const saveLeadTime = async (supplier: Supplier, raw: number) => {
+    const days = clampLead(raw);
+    if (days === (supplier.lead_time_days ?? 7)) return;
+    try {
+      const { error } = await supabase.from('suppliers').update({ lead_time_days: days }).eq('id', supplier.id);
+      if (error) throw error;
+      notify(`Días de entrega de ${supplier.name}: ${days}.`, 'success');
+      fetchSuppliers();
+    } catch (err: any) {
+      notify('Error al guardar días de entrega: ' + (err?.message || err), 'error');
     }
   };
 
@@ -1209,10 +1359,12 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       const { error } = await supabase.from('suppliers').insert({
         name: newSupplierName.trim(),
         phone: newSupplierPhone.trim() || null,
+        lead_time_days: clampLead(newSupplierLead),
       });
       if (error) throw error;
       setNewSupplierName('');
       setNewSupplierPhone('');
+      setNewSupplierLead('7');
       fetchSuppliers();
     } catch (err: any) {
       notify('Error al guardar proveedor: ' + err.message + ' (¿corriste el SQL de proveedores?)', 'error');
@@ -1834,7 +1986,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                 {(() => {
                   const tabHasErrors = (tab: string) => {
                     if (tab === 'datos') return !name.trim();
-                    if (tab === 'precios') return !(parseFloat(costPrice) > 0 && parseFloat(wholesalePrice) > 0 && parseFloat(retailPrice) > 0);
+                    if (tab === 'precios') return !(moneyOrZero(costPrice) > 0 && moneyOrZero(wholesalePrice) > 0 && moneyOrZero(retailPrice) > 0);
                     if (tab === 'stock') return !(parseFloat(stockQuantity) >= 0);
                     return false;
                   };
@@ -2106,8 +2258,8 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                       )}
                     </div>
                   )}
-                  {((parseFloat(wholesalePrice) || 0) > 0 && (parseFloat(wholesalePrice) || 0) < (parseFloat(costPrice) || 0)) ||
-                  ((parseFloat(retailPrice) || 0) > 0 && (parseFloat(retailPrice) || 0) < (parseFloat(costPrice) || 0)) ? (
+                  {((moneyOrZero(wholesalePrice) > 0 && moneyOrZero(wholesalePrice) < moneyOrZero(costPrice)) ||
+                  (moneyOrZero(retailPrice) > 0 && moneyOrZero(retailPrice) < moneyOrZero(costPrice))) ? (
                     <p className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3.5 py-2.5">
                       ⚠ Un precio está por debajo del costo (venta a pérdida). Te lo voy a confirmar al guardar.
                     </p>
@@ -2132,7 +2284,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">Stock Mínimo Alerta</label>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">Stock objetivo (mínimo)</label>
                       <input
                         type="number"
                         step="any"
@@ -2141,6 +2293,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                         className="w-full px-3 py-2.5 border-2 border-emerald-500 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-white text-sm font-semibold shadow-xs"
                         placeholder="5"
                       />
+                      <p className="text-[10px] font-semibold text-slate-400 mt-1">Nivel al que querés volver después de comprar. Se avisa cuando el stock llega a este número o menos.</p>
                     </div>
                   </div>
 
@@ -2438,6 +2591,16 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                 placeholder="Teléfono"
                 className="w-28 px-3 py-2.5 border-2 border-slate-200 rounded-2xl text-sm font-semibold focus:outline-none focus:border-emerald-500"
               />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={newSupplierLead}
+                onChange={(e) => setNewSupplierLead(e.target.value.replace(/\D/g, ''))}
+                onBlur={() => setNewSupplierLead(String(clampLead(newSupplierLead)))}
+                placeholder="Días"
+                title="Días de entrega"
+                className="w-16 px-2 py-2.5 border-2 border-slate-200 rounded-2xl text-sm font-semibold text-center focus:outline-none focus:border-emerald-500"
+              />
               <button
                 onClick={handleAddSupplier}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-sm font-bold transition active:scale-95 cursor-pointer shrink-0"
@@ -2445,6 +2608,9 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                 <Plus size={16} />
               </button>
             </div>
+            <p className="text-[10px] font-medium text-slate-500 -mt-2">
+              Días de entrega = lo que tarda el proveedor en reponer. Se usa para el mínimo de alerta.
+            </p>
             <div className="max-h-72 overflow-y-auto space-y-2">
               {suppliers.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-6">Sin proveedores cargados. Si no corriste el SQL, acá va a dar error al guardar.</p>
@@ -2452,22 +2618,41 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
                 suppliers.map((s) => {
                   const count = activeProducts.filter((p) => p.supplier_id === s.id).length;
                   return (
-                    <div key={s.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{s.name}</p>
+                    <div key={s.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 text-sm truncate">{s.name}</p>
                         <p className="text-[11px] text-slate-500 font-medium tnum">{s.phone || 'Sin teléfono'} • {count} productos</p>
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (!(await askConfirm(`¿Dar de baja a "${s.name}"?`))) return;
-                          const { error } = await supabase.from('suppliers').update({ is_active: false }).eq('id', s.id);
-                          if (error) notify('Error: ' + error.message, 'error');
-                          else fetchSuppliers();
-                        }}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition cursor-pointer"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <label htmlFor={`lead-${s.id}`} className="text-[10px] font-bold uppercase text-slate-500">Días</label>
+                        <input
+                          id={`lead-${s.id}`}
+                          key={`${s.id}-${s.lead_time_days ?? 7}`}
+                          type="text"
+                          inputMode="numeric"
+                          defaultValue={String(s.lead_time_days ?? 7)}
+                          onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, ''); }}
+                          onBlur={(e) => {
+                            const days = clampLead(e.target.value);
+                            e.target.value = String(days);
+                            void saveLeadTime(s, days);
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          title="Días de entrega"
+                          className="w-14 px-2 py-1.5 border-2 border-slate-200 rounded-xl text-sm font-bold text-center text-slate-900 focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!(await askConfirm(`¿Dar de baja a "${s.name}"?`))) return;
+                            const { error } = await supabase.from('suppliers').update({ is_active: false }).eq('id', s.id);
+                            if (error) notify('Error: ' + error.message, 'error');
+                            else fetchSuppliers();
+                          }}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition cursor-pointer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })

@@ -163,11 +163,15 @@ CREATE POLICY "card_brands_update" ON card_brands FOR UPDATE USING (auth.uid() I
 CREATE POLICY "card_brands_delete" ON card_brands FOR DELETE USING (user_role() = 'admin');
 
 -- ============================================
--- 13. PROFILES — ver todos; auto-alta propia; editar/borrar solo admin.
+-- 13. PROFILES — cada uno ve su perfil; admin+supervisor ven todo el padrón;
+--     auto-alta propia SOLO como vendedor; editar/borrar solo admin.
+--     (El detalle y un script de parche están en
+--      profiles_restriccion_usuarios.sql)
 -- ============================================
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "profiles_insert_own" ON profiles FOR INSERT WITH CHECK (id = auth.uid());
+CREATE POLICY "profiles_select_own" ON profiles FOR SELECT USING (id = auth.uid());
+CREATE POLICY "profiles_select_managers" ON profiles FOR SELECT USING (user_role() IN ('admin','supervisor'));
+CREATE POLICY "profiles_insert_own" ON profiles FOR INSERT WITH CHECK (id = auth.uid() AND role = 'vendedor');
 CREATE POLICY "profiles_update_admin" ON profiles FOR UPDATE USING (user_role() = 'admin') WITH CHECK (user_role() = 'admin');
 CREATE POLICY "profiles_delete_admin" ON profiles FOR DELETE USING (user_role() = 'admin');
 

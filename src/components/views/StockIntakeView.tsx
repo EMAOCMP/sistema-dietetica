@@ -7,7 +7,8 @@ import { ContextualTooltip } from '../../features/onboarding';
 import { ScannerModal } from '../../features/scanner/components/ScannerModal';
 import { useScanner } from '../../features/scanner/hooks/useScanner';
 import { SelectMenu } from '../ui/SelectMenu';
-import { Plus, Search, Trash2, Camera, Check, X, PackagePlus, Loader2, CalendarDays, Tag, ArrowLeftRight } from 'lucide-react';
+import { moneyOrZero, parseMoney } from '../../lib/moneyInput';
+import { Plus, Minus, Search, Trash2, Camera, Check, X, PackagePlus, Loader2, CalendarDays, Tag, ArrowLeftRight, RotateCcw } from 'lucide-react';
 import { canCancelIntake, canTransferStock } from '../../lib/permissions';
 
 interface LocationRow {
@@ -24,6 +25,8 @@ interface ReceiptRow {
   total_cost: number | null;
   created_at: string;
   confirmed_at: string | null;
+  /** Solo para borradores: cantidad de líneas guardadas. */
+  item_count?: number;
 }
 
 interface IntakeLine {
@@ -43,6 +46,20 @@ interface ReceiptItemDetail {
   expiration_date: string | null;
   products: { name: string } | null;
 }
+
+/** Paso del botón + / − según la unidad del producto. */
+const stepQty = (raw: string, dir: 1 | -1, unit?: string) => {
+  const step = unit === 'kg' ? 0.5 : 1;
+  const v = Math.max(0, (parseFloat(raw) || 0) + dir * step);
+  return String(Number(v.toFixed(3)));
+};
+
+/** Normaliza la cantidad: enteros para unidades, hasta 3 decimales para kg. */
+const normalizeQty = (raw: string, unit?: string) => {
+  const v = parseFloat(raw);
+  if (!Number.isFinite(v) || v < 0) return '0';
+  return String(unit === 'kg' ? Number(v.toFixed(3)) : Math.round(v));
+};
 
 export function StockIntakeView({ showToast, profile }: { showToast?: (msg: string, kind?: 'info' | 'success' | 'warning' | 'error') => void; profile?: Profile | null }) {
   const canCancel = canCancelIntake(profile?.role);
@@ -65,6 +82,12 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
   const [notes, setNotes] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [cancelAsk, setCancelAsk] = useState(false);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [resumingId, setResumingId] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [discardId, setDiscardId] = useState<string | null>(null);
+  const [deleteAskId, setDeleteAskId] = useState<string | null>(null);
 
   // Transferencia entre ubicaciones (admin/supervisor)
   const [locations, setLocations] = useState<LocationRow[]>([]);
@@ -134,7 +157,34 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
         .select('*')
         .order('created_at', { ascending: false })
         .limit(30);
-      setReceipts((recs || []) as ReceiptRow[]);
+      // Los borradores se traen aparte para que no desaparezcan del historial con el límite.
+      const { data: draftRecs } = await supabase
+        .from('stock_receipts')
+        .select('*')
+        .eq('status', 'draft')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      // Cantidad de productos por borrador (para el aviso).
+      const draftIds = (draftRecs || []).map((r: any) => r.id);
+      const itemCount: Record<string, number> = {};
+      if (draftIds.length > 0) {
+        const { data: draftItems } = await supabase
+          .from('stock_receipt_items')
+          .select('receipt_id')
+          .in('receipt_id', draftIds);
+        (draftItems || []).forEach((it: any) => {
+          itemCount[it.receipt_id] = (itemCount[it.receipt_id] || 0) + 1;
+        });
+      }
+
+      const merged = new Map<string, ReceiptRow>();
+      ([...(recs || []), ...(draftRecs || [])] as ReceiptRow[]).forEach((r) => merged.set(r.id, r));
+      setReceipts(
+        Array.from(merged.values())
+          .map((r) => (r.status === 'draft' ? { ...r, item_count: itemCount[r.id] || 0 } : r))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      );
       const { data: locs } = await supabase
         .from('locations')
         .select('id, name')
@@ -164,6 +214,12 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
   };
 
   const startNewReceipt = async () => {
+    // Si ya hay un borrador, lo retomamos en vez de crear otro (evita borradores huérfanos).
+    const draft = receipts.find((r) => r.status === 'draft');
+    if (draft) {
+      await resumeReceipt(draft);
+      return;
+    }
     try {
       const { data: numData } = await supabase.rpc('next_stock_receipt_number');
       const receipt_number = (numData as unknown as string) || `ING-${Date.now().toString().slice(-6)}`;
@@ -181,13 +237,77 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
       setLines([]);
       setSupplier('');
       setNotes('');
+      setCancelAsk(false);
+      setSavedAt(null);
       notify(`Ingreso ${receipt_number} creado. Escaneá productos.`, 'success');
     } catch (e: any) {
       notify(`No se pudo crear el ingreso: ${e?.message || e}`, 'error');
     }
   };
 
+  // Abre un borrador existente con sus líneas (incluye los generados desde una OC).
+  const resumeReceipt = async (r: ReceiptRow) => {
+    if (activeReceipt && activeReceipt.id !== r.id) {
+      notify('Terminá o cancelá el ingreso actual antes de abrir otro.', 'warning');
+      return;
+    }
+    setResumingId(r.id);
+    try {
+      const { data, error } = await supabase
+        .from('stock_receipt_items')
+        .select('product_id, quantity, cost_price, lot_number, expiration_date')
+        .eq('receipt_id', r.id);
+      if (error) throw error;
+      const items = (data || []) as Omit<ReceiptItemDetail, 'products'>[];
+
+      // Productos que ya no están activos también deben poder retomarse.
+      const ids = Array.from(new Set(items.map((i) => i.product_id)));
+      let pool = products;
+      const missing = ids.filter((id) => !pool.some((p) => p.id === id));
+      if (missing.length > 0) {
+        const { data: extra } = await supabase.from('products').select('*').in('id', missing);
+        if (extra && extra.length > 0) {
+          pool = [...pool, ...(extra as Product[])].sort((a, b) => a.name.localeCompare(b.name));
+          setProducts(pool);
+        }
+      }
+      const byId = new Map(pool.map((p) => [p.id, p]));
+
+      const mapped: IntakeLine[] = items
+        .filter((i) => byId.has(i.product_id))
+        .map((i, idx) => ({
+          key: `${i.product_id}-${idx}-${Date.now()}`,
+          product: byId.get(i.product_id)!,
+          quantity: String(Number(i.quantity)),
+          cost: i.cost_price != null ? String(i.cost_price) : '',
+          lot: i.lot_number || '',
+          expiry: i.expiration_date || '',
+        }));
+
+      setActiveReceipt(r);
+      setLines(mapped);
+      setSupplier(r.supplier_name || '');
+      setNotes(r.notes || '');
+      setActiveKey((typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? crypto.randomUUID()
+        : `ing-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      setExpandedId(null);
+      setCancelAsk(false);
+      setSavedAt(null);
+      setDiscardId(null);
+      setDeleteAskId(null);
+      notify(`Borrador ${r.receipt_number || r.id.slice(0, 8)} abierto con ${mapped.length} ${mapped.length === 1 ? 'producto' : 'productos'}.`, 'info');
+    } catch (e: any) {
+      notify(`No se pudo abrir el borrador: ${e?.message || e}`, 'error');
+    } finally {
+      setResumingId(null);
+    }
+  };
+
   const addProductLine = (p: Product) => {
+    const existingKey = lines.find((l) => l.product.id === p.id && !l.lot && !l.expiry)?.key;
+    const newKey = `${p.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setFocusKey(existingKey || newKey);
     setLines((prev) => {
       const existing = prev.find((l) => l.product.id === p.id && !l.lot && !l.expiry);
       if (existing) {
@@ -198,7 +318,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
         );
       }
       return [...prev, {
-        key: `${p.id}-${Date.now()}`,
+        key: newKey,
         product: p,
         quantity: '1',
         cost: p.cost_price ? String(p.cost_price) : '',
@@ -216,7 +336,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
     setLines((prev) => prev.filter((l) => l.key !== key));
   };
 
-  const totalCost = lines.reduce((a, l) => a + (parseFloat(l.quantity) || 0) * (parseFloat(l.cost) || 0), 0);
+  const totalCost = lines.reduce((a, l) => a + (parseFloat(l.quantity) || 0) * moneyOrZero(l.cost), 0);
 
   const saveDraftMeta = async (): Promise<boolean> => {
     if (!activeReceipt) return false;
@@ -229,7 +349,50 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
       notify(`No se pudieron guardar los datos del ingreso: ${error.message}`, 'warning');
       return false;
     }
+    setSavedAt(Date.now());
     return true;
+  };
+
+  // Persistencia de líneas del borrador (delete + insert idempotente y serializado).
+  const itemsTimerRef = useRef<number | undefined>(undefined);
+  const syncInFlight = useRef<Promise<boolean> | null>(null);
+  const syncItems = (receiptId: string, itemsToSave: IntakeLine[]): Promise<boolean> => {
+    // Si hay una cantidad vacía (el usuario está escribiendo) no tocamos el borrador.
+    const hasEmpty = itemsToSave.some((l) => {
+      const raw = l.quantity.trim();
+      return raw === '' || !Number.isFinite(parseFloat(raw));
+    });
+    if (hasEmpty) return Promise.resolve(false);
+    // Las líneas en cero no se guardan (todavía no son mercadería recibida).
+    const validLines = itemsToSave.filter((l) => (parseFloat(l.quantity) || 0) > 0);
+
+    const previous = syncInFlight.current ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(async () => {
+      const { error: cleanupError } = await supabase
+        .from('stock_receipt_items')
+        .delete()
+        .eq('receipt_id', receiptId);
+      if (cleanupError) throw cleanupError;
+      if (validLines.length === 0) return;
+      const items = validLines.map((l) => {
+        const cost = parseMoney(l.cost);
+        return {
+          receipt_id: receiptId,
+          product_id: l.product.id,
+          quantity: parseFloat(l.quantity),
+          cost_price: Number.isFinite(cost) ? cost : null,
+          lot_number: l.lot || null,
+          expiration_date: l.expiry || null,
+        };
+      });
+      const { error } = await supabase.from('stock_receipt_items').insert(items);
+      if (error) throw error;
+    });
+    const tracked = run.then(() => true).finally(() => {
+      if (syncInFlight.current === tracked) syncInFlight.current = null;
+    });
+    syncInFlight.current = tracked;
+    return tracked;
   };
 
   // Autosave (debounce) de proveedor/notas/total mientras se edita el borrador,
@@ -243,6 +406,20 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplier, notes, totalCost, activeReceipt?.id]);
 
+  // Autosave de las líneas: si se cierra el navegador, el borrador no queda vacío.
+  useEffect(() => {
+    if (!activeReceipt) return;
+    const receiptId = activeReceipt.id;
+    window.clearTimeout(itemsTimerRef.current);
+    itemsTimerRef.current = window.setTimeout(() => {
+      syncItems(receiptId, lines)
+        .then((saved) => { if (saved) setSavedAt(Date.now()); })
+        .catch((e) => console.warn('No se pudo autoguardar el borrador:', e));
+    }, 900);
+    return () => window.clearTimeout(itemsTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, activeReceipt?.id]);
+
   const handleConfirm = async () => {
     if (!activeReceipt || lines.length === 0) {
       notify('Agregá al menos un producto.', 'warning');
@@ -255,31 +432,22 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
         notify(`Cantidad inválida en "${l.product.name}".`, 'error');
         return;
       }
+      if (l.product.unit_type !== 'kg' && !Number.isInteger(q)) {
+        notify(`"${l.product.name}" se vende por unidad: la cantidad debe ser entera.`, 'error');
+        return;
+      }
     }
     setConfirming(true);
     try {
+      // Frenar autosaves pendientes y esperar el que esté en vuelo.
+      window.clearTimeout(itemsTimerRef.current);
+      if (syncInFlight.current) await syncInFlight.current.catch(() => undefined);
+
       const metaOk = await saveDraftMeta();
       if (!metaOk) throw new Error('No se pudieron guardar los datos del ingreso.');
 
-      // Idempotente al reintentar: limpiar ítems previos de este borrador
-      // antes de reinsertar, así un reintento no duplica líneas.
-      const { error: cleanupError } = await supabase
-        .from('stock_receipt_items')
-        .delete()
-        .eq('receipt_id', activeReceipt.id);
-      if (cleanupError) throw cleanupError;
-
-      // Persistir items
-      const items = lines.map((l) => ({
-        receipt_id: activeReceipt.id,
-        product_id: l.product.id,
-        quantity: parseFloat(l.quantity),
-        cost_price: l.cost ? parseFloat(l.cost) : null,
-        lot_number: l.lot || null,
-        expiration_date: l.expiry || null,
-      }));
-      const { error: itemsError } = await supabase.from('stock_receipt_items').insert(items);
-      if (itemsError) throw itemsError;
+      // Persistir items (idempotente: reemplaza lo que haya en el borrador).
+      await syncItems(activeReceipt.id, lines);
 
       // Confirmar (transacción: stock + movimientos + costo)
       const { error: confirmError } = await supabase.rpc('confirm_stock_receipt', {
@@ -289,9 +457,20 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
       });
       if (confirmError) throw confirmError;
 
+      // Si este ingreso vino de una Orden de Compra, marcarla como recibida
+      try {
+        const { data: po } = await supabase.from('purchase_orders').select('id').eq('receipt_id', activeReceipt.id).maybeSingle();
+        if (po?.id) {
+          await supabase.rpc('mark_purchase_order_received', { p_order_id: po.id, p_receipt_id: activeReceipt.id });
+        }
+      } catch { /* best-effort */ }
+
       notify(`Ingreso ${activeReceipt.receipt_number} confirmado. Stock actualizado.`, 'success');
       setActiveReceipt(null);
       setLines([]);
+      setCancelAsk(false);
+      setSavedAt(null);
+      setFocusKey(null);
       fetchAll();
     } catch (e: any) {
       notify(`Error al confirmar: ${e?.message || e}`, 'error');
@@ -302,15 +481,64 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
 
   const handleCancelDraft = async () => {
     if (!activeReceipt) return;
-    if (!confirm('¿Cancelar este ingreso borrador? Se pierden las líneas.')) return;
     try {
       await supabase.from('stock_receipts').update({ status: 'cancelled' }).eq('id', activeReceipt.id);
       setActiveReceipt(null);
       setLines([]);
+      setCancelAsk(false);
+      setSavedAt(null);
       fetchAll();
       notify('Ingreso cancelado.', 'info');
     } catch (e: any) {
       notify(`Error: ${e?.message || e}`, 'error');
+    }
+  };
+
+  // Descarta un borrador desde el aviso o el historial (borrado lógico).
+  const discardDraft = async (r: ReceiptRow) => {
+    try {
+      const { error } = await supabase
+        .from('stock_receipts')
+        .update({ status: 'cancelled' })
+        .eq('id', r.id)
+        .eq('status', 'draft');
+      if (error) throw error;
+      if (activeReceipt?.id === r.id) {
+        setActiveReceipt(null);
+        setLines([]);
+        setCancelAsk(false);
+        setSavedAt(null);
+      }
+      if (expandedId === r.id) setExpandedId(null);
+      setDiscardId(null);
+      await fetchAll();
+      notify(`Borrador ${r.receipt_number || r.id.slice(0, 8)} descartado.`, 'info');
+    } catch (e: any) {
+      notify(`No se pudo descartar: ${e?.message || e}`, 'error');
+    }
+  };
+
+  // Borra definitivamente un borrador o cancelado (RPC delete_stock_receipt).
+  const deleteReceipt = async (r: ReceiptRow) => {
+    if (activeReceipt?.id === r.id) {
+      notify('Terminá o cancelá el ingreso actual antes de eliminarlo.', 'warning');
+      return;
+    }
+    try {
+      const { error } = await supabase.rpc('delete_stock_receipt', { p_receipt_id: r.id });
+      if (error) throw error;
+      if (expandedId === r.id) setExpandedId(null);
+      setDeleteAskId(null);
+      await fetchAll();
+      notify(`Ingreso ${r.receipt_number || r.id.slice(0, 8)} eliminado definitivamente.`, 'success');
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      notify(
+        /delete_stock_receipt|schema cache|does not exist/i.test(msg)
+          ? 'Falta correr supabase/ingresos_borradores.sql en el SQL Editor de Supabase.'
+          : `No se pudo eliminar: ${msg}`,
+        'error',
+      );
     }
   };
 
@@ -376,7 +604,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
         barcode: quickAdd.code,
         name,
         unit_type: 'unit',
-        cost_price: parseFloat(qaCost) || 0,
+        cost_price: moneyOrZero(qaCost),
         wholesale_price: 0,
         retail_price: 0,
         stock_quantity: 0,
@@ -404,6 +632,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
     ? 'bg-amber-100 text-amber-700'
     : s === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500';
   const destLocationName = locations.find((l) => l.id === destLocation)?.name || '';
+  const drafts = receipts.filter((r) => r.status === 'draft');
 
   const toggleDetail = async (id: string) => {
     if (expandedId === id) {
@@ -470,6 +699,83 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
           </div>
         )}
       </div>
+
+      {/* Borradores pendientes (incluye los generados desde una Orden de compra) */}
+      {!activeReceipt && drafts.length > 0 && (
+        <div className="rounded-2xl border-2 border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 sm:p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <RotateCcw size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-sm font-extrabold text-amber-800 dark:text-amber-200">
+              {drafts.length === 1 ? 'Tenés un borrador sin confirmar' : `Tenés ${drafts.length} borradores sin confirmar`}
+            </p>
+          </div>
+          {drafts.slice(0, 5).map((d) => (
+            <div
+              key={d.id}
+              className="rounded-xl bg-white/70 dark:bg-white/5 border border-amber-200/70 dark:border-amber-500/20 px-2.5 py-2 flex flex-wrap items-center justify-between gap-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold font-mono text-slate-800 dark:text-white">
+                  {d.receipt_number || d.id.slice(0, 8)}
+                  <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                    Borrador
+                  </span>
+                </p>
+                <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 truncate">
+                  {new Date(d.created_at).toLocaleString('es-AR')}
+                  {d.supplier_name ? ` · ${d.supplier_name}` : ''}
+                  {d.notes?.startsWith('Generado desde ') ? ` · ${d.notes}` : ''}
+                  {` · ${d.item_count ?? 0} ${(d.item_count ?? 0) === 1 ? 'producto' : 'productos'}`}
+                  {d.total_cost != null && d.total_cost > 0
+                    ? ` · $${d.total_cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
+                    : ''}
+                </p>
+              </div>
+              {discardId === d.id ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11px] font-bold text-red-700 dark:text-red-300">¿Descartar?</span>
+                  <button
+                    onClick={() => discardDraft(d)}
+                    className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    Sí
+                  </button>
+                  <button
+                    onClick={() => setDiscardId(null)}
+                    className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-white/10 text-slate-700 dark:text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => resumeReceipt(d)}
+                    disabled={resumingId === d.id}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
+                  >
+                    {resumingId === d.id
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <RotateCcw size={12} />}
+                    Retomar
+                  </button>
+                  <button
+                    onClick={() => { setDiscardId(d.id); setDeleteAskId(null); }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15 text-slate-600 dark:text-slate-200 text-[11px] font-bold cursor-pointer"
+                  >
+                    Descartar
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {drafts.length > 5 && (
+            <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              Y {drafts.length - 5} más abajo en el historial.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Transferencia entre ubicaciones */}
       {showTransfer && canTransfer && locations.length >= 2 && !activeReceipt && (
@@ -572,6 +878,9 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
                 {lines.length === 0
                   ? 'Agregá productos escaneando o buscando abajo.'
                   : `${lines.length} ${lines.length === 1 ? 'producto' : 'productos'} en el lote · ${destLocationName || 'cargando ubicación…'}`}
+                {savedAt != null && lines.length > 0 && (
+                  <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">· guardado</span>
+                )}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -583,7 +892,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
               </button>
               {canCancel && (
                 <button
-                  onClick={handleCancelDraft}
+                  onClick={() => setCancelAsk(true)}
                   className="px-3 py-2 text-slate-400 hover:text-red-500 transition cursor-pointer"
                   title="Cancelar borrador"
                 >
@@ -592,6 +901,28 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
               )}
             </div>
           </div>
+
+          {cancelAsk && (
+            <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold text-red-700 dark:text-red-300">
+                ¿Cancelar este borrador? Se pierden las líneas cargadas.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCancelAsk(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-white/10 text-slate-700 dark:text-white text-xs font-bold cursor-pointer"
+                >
+                  Volver
+                </button>
+                <button
+                  onClick={handleCancelDraft}
+                  className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer"
+                >
+                  Sí, cancelar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Buscador */}
           <div className="relative">
@@ -641,7 +972,7 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
           ) : (
             <div className="space-y-2">
               {lines.map((l) => {
-                const lineSubtotal = (parseFloat(l.quantity) || 0) * (parseFloat(l.cost) || 0);
+                const lineSubtotal = (parseFloat(l.quantity) || 0) * moneyOrZero(l.cost);
                 return (
                 <div key={l.key} className="p-3 bg-slate-50 dark:bg-[#232323] rounded-2xl border border-slate-200 dark:border-[#333333] space-y-2">
                   <div className="flex justify-between items-center gap-2">
@@ -660,13 +991,41 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <label className="text-[11px] font-bold text-slate-500">
-                      Cant.
-                      <input
-                        type="number" min="0" step="any" inputMode="decimal"
-                        value={l.quantity}
-                        onChange={(e) => updateLine(l.key, { quantity: e.target.value })}
-                        className="mt-0.5 w-full px-2 py-1.5 border border-slate-200 dark:border-[#444] rounded-lg text-sm font-mono font-bold text-slate-900 dark:text-white bg-white dark:bg-[#1F1F1F] focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      />
+                      <span className="flex items-center justify-between gap-1">
+                        Cant.
+                        <span className="text-[9px] font-bold uppercase text-slate-400">
+                          {l.product.unit_type === 'kg' ? 'kg' : 'un'}
+                        </span>
+                      </span>
+                      <div className="mt-0.5 flex items-stretch gap-1">
+                        <button
+                          type="button"
+                          onClick={() => updateLine(l.key, { quantity: stepQty(l.quantity, -1, l.product.unit_type) })}
+                          className="w-7 shrink-0 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white flex items-center justify-center cursor-pointer transition"
+                          title="Restar"
+                        >
+                          <Minus size={13} />
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          step={l.product.unit_type === 'kg' ? '0.001' : '1'}
+                          inputMode={l.product.unit_type === 'kg' ? 'decimal' : 'numeric'}
+                          value={l.quantity}
+                          autoFocus={l.key === focusKey}
+                          onChange={(e) => updateLine(l.key, { quantity: e.target.value })}
+                          onBlur={(e) => updateLine(l.key, { quantity: normalizeQty(e.target.value, l.product.unit_type) })}
+                          className="w-full min-w-0 px-1.5 py-1.5 border border-slate-200 dark:border-[#444] rounded-lg text-sm font-mono font-bold text-center text-slate-900 dark:text-white bg-white dark:bg-[#1F1F1F] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateLine(l.key, { quantity: stepQty(l.quantity, 1, l.product.unit_type) })}
+                          className="w-7 shrink-0 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-white flex items-center justify-center cursor-pointer transition"
+                          title="Sumar"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
                     </label>
                     <label className="text-[11px] font-bold text-slate-500">
                       Costo unit.
@@ -820,28 +1179,73 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
           </div>
         ) : receipts.map((r) => (
           <div key={r.id} className="border-b last:border-0 border-slate-100 dark:border-[#2a2a2a]">
-            <button
-              onClick={() => toggleDetail(r.id)}
-              className="w-full flex justify-between items-center py-2 text-left cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition rounded-lg px-1"
-            >
-              <div>
-                <p className="text-sm font-extrabold font-mono text-slate-800 dark:text-white">{r.receipt_number || r.id.slice(0, 8)}</p>
-                <p className="text-[11px] text-slate-500 font-semibold">
-                  {new Date(r.created_at).toLocaleString('es-AR')}
-                  {r.supplier_name ? ` · ${r.supplier_name}` : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {r.total_cost != null && r.total_cost > 0 && (
-                  <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
-                    ${r.total_cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleDetail(r.id)}
+                className="flex-1 min-w-0 flex justify-between items-center py-2 text-left cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition rounded-lg px-1"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold font-mono text-slate-800 dark:text-white">{r.receipt_number || r.id.slice(0, 8)}</p>
+                  <p className="text-[11px] text-slate-500 font-semibold truncate">
+                    {new Date(r.created_at).toLocaleString('es-AR')}
+                    {r.supplier_name ? ` · ${r.supplier_name}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {r.total_cost != null && r.total_cost > 0 && (
+                    <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
+                      ${r.total_cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                    </span>
+                  )}
+                  <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${statusColor(r.status)}`}>
+                    {statusLabel(r.status)}
                   </span>
-                )}
-                <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${statusColor(r.status)}`}>
-                  {statusLabel(r.status)}
-                </span>
+                </div>
+              </button>
+              {r.status === 'draft' && (
+                <button
+                  onClick={() => resumeReceipt(r)}
+                  disabled={resumingId === r.id}
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:text-amber-300 text-[11px] font-bold transition cursor-pointer flex items-center gap-1 disabled:opacity-60"
+                  title="Retomar este borrador"
+                >
+                  {resumingId === r.id
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <RotateCcw size={12} />}
+                  Retomar
+                </button>
+              )}
+              {canCancel && (r.status === 'draft' || r.status === 'cancelled') && (
+                <button
+                  onClick={() => { setDeleteAskId(r.id); setDiscardId(null); }}
+                  className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition cursor-pointer"
+                  title="Eliminar definitivamente"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            {deleteAskId === r.id && (
+              <div className="mb-1 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 px-2.5 py-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-bold text-red-700 dark:text-red-300">
+                  ¿Eliminar definitivamente {r.receipt_number || r.id.slice(0, 8)}? No se puede deshacer.
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => deleteReceipt(r)}
+                    className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    Sí, eliminar
+                  </button>
+                  <button
+                    onClick={() => setDeleteAskId(null)}
+                    className="px-2.5 py-1 rounded-lg bg-white dark:bg-white/10 text-slate-700 dark:text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    Volver
+                  </button>
+                </div>
               </div>
-            </button>
+            )}
             {expandedId === r.id && (
               <div className="pb-3 pt-1 space-y-1.5">
                 {detailLoading ? (
@@ -877,11 +1281,11 @@ export function StockIntakeView({ showToast, profile }: { showToast?: (msg: stri
               || products.find((x) => x.barcode === code);
             if (p) {
               addProductLine(p);
-              notify(`"${p.name}" agregado al lote.`, 'success');
+              notify(`"${p.name}" agregado al lote. Seguí escaneando.`, 'success');
             } else {
               notify(`Código ${code} no está en el catálogo local.`, 'warning');
             }
-            setScannerOpen(false);
+            // El modal queda abierto para escanear varios productos seguidos.
             scannerApi.resetStatus();
           }}
           onCreateProduct={(code) => {

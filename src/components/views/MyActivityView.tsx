@@ -79,7 +79,7 @@ export function MyActivityView({ profile }: { profile: Profile | null }) {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-2">
+      <div data-tour="activity-sales" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-2">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
           Mis ventas ({sales.length})
         </p>
@@ -106,7 +106,7 @@ export function MyActivityView({ profile }: { profile: Profile | null }) {
         )}
       </div>
 
-      <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-2">
+      <div data-tour="activity-moves" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-2">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
           Mis movimientos de stock ({moves.length})
         </p>

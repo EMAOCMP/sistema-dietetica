@@ -14,7 +14,7 @@ import { RevenueBreakdown } from '../charts/RevenueBreakdown';
 import { StockBreakdown } from '../charts/StockBreakdown';
 // Exportaciones de ventas: xlsx dinámico (exportXlsx)
 import { netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
-import { canAnnulSales, isSeller } from '../../lib/permissions';
+import { canAnnulSales, canAccessTab, isSeller } from '../../lib/permissions';
 import { normalizePaymentMethod } from '../../lib/paymentMethods';
 import { fmtMoney0 } from '../../lib/format';
 import { useOnboarding } from '../../features/onboarding';
@@ -191,6 +191,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
     }
   };
 
+  // Atajo comercial del Panel: apunta al doble del stock objetivo (no es la demanda).
   const suggestQty = (p: Product) => {
     const min = Number(p.min_stock || 5);
     const stock = Number(p.stock_quantity);
@@ -237,37 +238,54 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
     }));
   };
 
-  const handleCopyOrder = async () => {
+  // Cantidad a pedir = lo que falta para llegar al stock objetivo (nunca negativa)
+  const replenishQty = (p: Product) =>
+    Math.max(Math.round((Number(p.min_stock || 5) - Number(p.stock_quantity)) * 100) / 100, 0);
+
+  type CopyMode = 'faltan' | 'sugerido';
+
+  // Agrupa por proveedor y arma las líneas con la cantidad elegida
+  const buildSupplierLines = (items: Product[], qtyFn: (p: Product) => number = replenishQty) =>
+    groupBySupplier(items)
+      .map((g) => ({
+        name: g.name,
+        phone: g.phone,
+        lines: g.prods
+          .map((p) => ({ name: p.name, qty: qtyFn(p), unit: p.unit_type }))
+          .filter((l) => l.qty > 0),
+      }))
+      .filter((g) => g.lines.length > 0);
+
+  // Encabezado del pedido con la fecha de hoy
+  const orderHeader = (mode: CopyMode) =>
+    [
+      `*ORDEN DE COMPRA ${mode === 'sugerido' ? 'SUGERIDA' : 'FALTAN'} - DIETÉTICA VISHAL*`,
+      `Fecha: ${new Date().toLocaleDateString('es-AR')}`,
+    ].join('\n');
+
+  // mode 'faltan' = objetivo − stock | 'sugerido' = objetivo × 2 − stock
+  const copyOrder = async (mode: CopyMode) => {
     const pending = lowStockProducts.filter((p) => !orders[p.id]);
-    if (pending.length === 0) return;
-    const lines = ['*ORDEN DE COMPRA SUGERIDA - DIETÉTICA VISHAL*', `Fecha: ${new Date().toLocaleDateString('es-AR')}`, ''];
-    let total = 0;
-    groupBySupplier(pending).forEach((g) => {
-      lines.push('', `*${g.name.toUpperCase()}*`);
-      g.prods.forEach((p) => {
-        const q = suggestQty(p);
-        const cost = q * Number(p.cost_price);
-        total += cost;
-        lines.push(`- ${p.name}: ${q} ${p.unit_type} (costo est. $${cost.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`);
-      });
-    });
-    lines.push('', `*Costo estimado total: $${total.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`);
+    const groups = buildSupplierLines(pending, mode === 'sugerido' ? suggestQty : replenishQty);
+    if (groups.length === 0) return;
+    const body = groups
+      .map((g) => [`*${g.name.toUpperCase()}*`, ...g.lines.map((l) => `* ${l.name}: ${l.qty} ${l.unit}`)].join('\n'))
+      .join('\n\n');
+    const text = `${orderHeader(mode)}\n\n${body}`;
     try {
-      await navigator.clipboard.writeText(lines.join('\n'));
+      await navigator.clipboard.writeText(text);
       setCopiedOrder(true);
       setTimeout(() => setCopiedOrder(false), 2500);
     } catch { /* noop */ }
   };
 
+  const handleCopyOrder = () => copyOrder('faltan');
+
   const handleWhatsAppOrders = () => {
     const pending = lowStockProducts.filter((p) => !orders[p.id]);
-    if (pending.length === 0) return;
-    groupBySupplier(pending).forEach((g) => {
-      const list = g.prods.map((p) => {
-        const q = suggestQty(p);
-        return `- ${p.name}: ${q} ${p.unit_type} (stock ${p.stock_quantity}, min ${p.min_stock || 5})`;
-      }).join('\n');
-      const msg = encodeURIComponent(`Hola ${g.name}, necesito reponer:\n${list}`);
+    buildSupplierLines(pending).forEach((g) => {
+      const list = g.lines.map((l) => `* ${l.name}: ${l.qty} ${l.unit}`).join('\n');
+      const msg = encodeURIComponent(`${orderHeader('faltan')}\n\n*${g.name.toUpperCase()}*\n${list}`);
       window.open(g.phone ? `https://wa.me/${g.phone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank');
     });
   };
@@ -401,9 +419,11 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             product_id,
             cost_price_at_sale,
             products (name, category, cost_price)`;
+      // `sales` tiene dos FKs a `profiles` (`user_id` y `cancelled_by`): el embed
+      // necesita el nombre del FK o PostgREST responde PGRST201 (más de una relación).
       const salesSelect = (itemsCols: string) => `
           *,
-          profiles (full_name),
+          profiles!sales_user_id_fkey (full_name),
           sale_items (${itemsCols})
         `;
       let allSales: any[] | null = null;
@@ -663,29 +683,21 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
 
       if (updateError) throw updateError;
 
-      // 2. Restore stock for each item
+      // 2. Restore stock for each item.
+      //    Pasa por adjust_stock (inventory es la fuente de verdad); escribir
+      //    products.stock_quantity directo desincronizaba el stock de las ventas.
       if (sale.sale_items) {
         for (const item of sale.sale_items) {
-          const { data: prodData } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
-
-          if (prodData) {
-            const restoredStock = Number(prodData.stock_quantity) + Number(item.quantity);
-            await supabase
-              .from('products')
-              .update({ stock_quantity: restoredStock })
-              .eq('id', item.product_id);
-          }
-
-          await supabase.from('stock_movements').insert({
-            product_id: item.product_id,
-            type: 'adjustment',
-            quantity: item.quantity,
-            notes: `Anulación Venta #${sale.id.slice(0, 8)}`,
+          const { error: stockError } = await supabase.rpc('adjust_stock', {
+            p_product_id: item.product_id,
+            p_quantity: Number(item.quantity),
+            p_reason: `Anulación Venta #${sale.id.slice(0, 8)}`,
+            p_reference_type: 'sale_cancel',
+            p_reference_id: sale.id,
           });
+          if (stockError) {
+            console.warn('[Sale] No se pudo restituir stock:', item.product_id, stockError.message);
+          }
         }
       }
 
@@ -1419,13 +1431,13 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         const visitedCashClose = hasVisitedSection('cashclose');
         const visitedReports = hasVisitedSection('reports');
         const steps = [
-          { done: stats.totalProducts > 0, title: 'Cargar tu primer producto', sub: stats.totalProducts > 0 ? `${stats.totalProducts} productos cargados` : 'Agregá tu catálogo y stock', action: () => setActiveTab('products'), actionLabel: 'Ir a Productos' },
-          { done: stats.salesCount > 0, title: 'Registrar tu primera venta', sub: stats.salesCount > 0 ? `${stats.salesCount} ventas realizadas` : 'Operá desde la caja', action: () => setActiveTab('pos'), actionLabel: 'Ir al POS' },
-          { done: dailyGoal > 0, title: 'Definir la meta de ventas diaria', sub: dailyGoal > 0 ? `Meta: $${dailyGoal.toLocaleString('es-AR')}` : 'Fijá un objetivo para tu equipo', action: () => { setEditingGoal(true); setGoalInput(''); }, actionLabel: 'Definir meta' },
-          { done: visitedHistory, title: 'Revisar pedidos e historial', sub: visitedHistory ? 'Historial revisado ✓' : 'Controlá trazabilidad y reportes', action: () => setActiveTab('history'), actionLabel: 'Ir ahora' },
-          { done: visitedCashClose, title: 'Hacer tu primer cierre de caja', sub: visitedCashClose ? 'Cierre revisado ✓' : 'Compará lo esperado con el cajón', action: () => setActiveTab('cashclose'), actionLabel: 'Cerrar caja' },
-          { done: visitedReports, title: 'Mirar el reporte de ganancias', sub: visitedReports ? 'Reportes revisados ✓' : 'Ventas, gastos y ganancia neta', action: () => setActiveTab('reports'), actionLabel: 'Ver reportes' },
-        ];
+          { done: stats.totalProducts > 0, tab: 'products', title: 'Cargar tu primer producto', sub: stats.totalProducts > 0 ? `${stats.totalProducts} productos cargados` : 'Agregá tu catálogo y stock', action: () => setActiveTab('products'), actionLabel: 'Ir a Productos' },
+          { done: stats.salesCount > 0, tab: 'pos', title: 'Registrar tu primera venta', sub: stats.salesCount > 0 ? `${stats.salesCount} ventas realizadas` : 'Operá desde la caja', action: () => setActiveTab('pos'), actionLabel: 'Ir al POS' },
+          { done: dailyGoal > 0, tab: null, title: 'Definir la meta de ventas diaria', sub: dailyGoal > 0 ? `Meta: $${dailyGoal.toLocaleString('es-AR')}` : 'Fijá un objetivo para tu equipo', action: () => { setEditingGoal(true); setGoalInput(''); }, actionLabel: 'Definir meta' },
+          { done: visitedHistory, tab: 'history', title: 'Revisar pedidos e historial', sub: visitedHistory ? 'Historial revisado ✓' : 'Controlá trazabilidad y reportes', action: () => setActiveTab('history'), actionLabel: 'Ir ahora' },
+          { done: visitedCashClose, tab: 'cashclose', title: 'Hacer tu primer cierre de caja', sub: visitedCashClose ? 'Cierre revisado ✓' : 'Compará lo esperado con el cajón', action: () => setActiveTab('cashclose'), actionLabel: 'Cerrar caja' },
+          { done: visitedReports, tab: 'reports', title: 'Mirar el reporte de ganancias', sub: visitedReports ? 'Reportes revisados ✓' : 'Ventas, gastos y ganancia neta', action: () => setActiveTab('reports'), actionLabel: 'Ver reportes' },
+        ].filter((s) => !s.tab || canAccessTab(profile?.role, s.tab));
         const doneCount = steps.filter((s) => s.done).length;
         if (doneCount === steps.length) return null;
         const pct = Math.round((doneCount / steps.length) * 100);
@@ -1799,7 +1811,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
                       <tr className="bg-slate-50/70 text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider border-b border-slate-200 dark:bg-white/5 dark:border-[#333333]">
                         <th className="p-4 whitespace-nowrap">Producto</th>
                         <th className="p-4 whitespace-nowrap text-center">Stock</th>
-                        <th className="p-4 whitespace-nowrap">Sugerido</th>
+                        <th className="p-4 whitespace-nowrap">Sugerido (2× mínimo)</th>
                         <th className="p-4 whitespace-nowrap">Costo est.</th>
                         <th className="p-4 whitespace-nowrap text-right sticky right-0 z-10 bg-slate-50/70 dark:bg-white/5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.5)]">Pedido</th>
                       </tr>
@@ -1818,7 +1830,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
                               )}
                             </span>
                             <span className="block text-xs text-slate-500 dark:text-slate-400 font-medium">
-                              {p.category || 'General'} • mín {p.min_stock} {p.unit_type} • {supplierName(p)}
+                              {p.category || 'General'} • objetivo {p.min_stock} {p.unit_type} • {supplierName(p)}
                             </span>
                           </td>
                           <td className={`p-4 font-bold tnum whitespace-nowrap text-center ${empty ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>{p.stock_quantity}</td>
@@ -2004,8 +2016,9 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             products={lowStockProducts}
             orders={orders}
             onToggleOrdered={toggleOrdered}
-            onCopyOrder={handleCopyOrder}
+            onCopyOrder={copyOrder}
             copiedOrder={copiedOrder}
+            replenishQty={replenishQty}
             suggestQty={suggestQty}
           />
         </ModalShell>
