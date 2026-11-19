@@ -368,7 +368,7 @@ export function CashCloseView({ profile, showToast }: {
       </div>
 
       {loading ? (
-        <p className="text-center text-slate-400 py-8 flex items-center justify-center gap-2">
+        <p className="text-center text-slate-500 dark:text-slate-400 py-8 flex items-center justify-center gap-2">
           <Loader2 size={18} className="animate-spin" /> Calculando...
         </p>
       ) : (
@@ -381,7 +381,7 @@ export function CashCloseView({ profile, showToast }: {
               { label: 'Transf. + Tarjeta + MP', value: money(stats.transfer + stats.card + stats.mp), mono: true },
             ].map((k) => (
               <div key={k.label} className={`rounded-2xl border-2 p-3 ${k.hi ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/40' : 'border-slate-200 dark:border-[#333333] bg-white dark:bg-[#1F1F1F]'}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{k.label}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{k.label}</p>
                 <p className="text-lg font-extrabold text-slate-900 dark:text-white tabular-nums">{k.value}</p>
               </div>
             ))}
@@ -389,13 +389,13 @@ export function CashCloseView({ profile, showToast }: {
 
           <div data-tour="cashclose-movements" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
             <div>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Efectivo del día</p>
+              <p className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Efectivo del día</p>
               <p className="text-[11px] font-semibold text-slate-500 tabular-nums mt-1">
                 Fondo {money(opening)} + Ventas {money(stats.cash)} + Ingresos {money(cashIn)}
                 {' '}− Retiros {money(cashOut)} − Gastos {money(cashExpenses)} ={' '}
                 <span className="font-extrabold text-slate-800 dark:text-white">{money(expected)}</span>
               </p>
-              <p className="text-[10px] font-semibold text-slate-400 mt-1">
+              <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-1">
                 Los gastos en efectivo de Reportes se descuentan solos: no los cargues también como retiro.
               </p>
             </div>
@@ -441,10 +441,10 @@ export function CashCloseView({ profile, showToast }: {
               </button>
             </div>
 
-            <p className="text-[11px] font-semibold text-slate-500">
+            <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
               {MOVEMENT_OPTIONS.find((o) => o.value === movType)?.hint}.
               {movPreview !== null && (
-                <span className={`font-extrabold ${movPreview < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                <span className={`font-extrabold ${movPreview < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'}`}>
                   {' '}Con este movimiento el esperado queda en {money(movPreview)}
                   {movPreview < 0 ? ' — negativo, revisá el monto' : ''}.
                 </span>
@@ -458,7 +458,7 @@ export function CashCloseView({ profile, showToast }: {
             )}
 
             {movements.length === 0 ? (
-              <p className="text-sm text-slate-400 font-semibold">Sin movimientos de efectivo en este día.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold">Sin movimientos de efectivo en este día.</p>
             ) : (
               <div className="space-y-1.5">
                 {movements.map((m) => (
@@ -466,20 +466,20 @@ export function CashCloseView({ profile, showToast }: {
                     <div>
                       <p className="font-bold text-slate-800 dark:text-white text-xs">
                         {MOVEMENT_LABELS[m.type]}
-                        {m.note ? <span className="font-semibold text-slate-400"> · {m.note}</span> : null}
+                        {m.note ? <span className="font-semibold text-slate-500 dark:text-slate-400"> · {m.note}</span> : null}
                       </p>
-                      <p className="text-[11px] text-slate-400 tabular-nums">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                         {new Date(m.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`font-extrabold tabular-nums ${m.type === 'out' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <span className={`font-extrabold tabular-nums ${m.type === 'out' ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                         {m.type === 'out' ? '−' : '+'}{money(m.amount)}
                       </span>
                       <button
                         onClick={() => handleDeleteMovement(m)}
                         title="Eliminar movimiento"
-                        className="p-1 text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
+                        className="p-1 text-slate-500 dark:text-slate-400 hover:text-red-600 rounded-lg transition cursor-pointer"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -504,7 +504,7 @@ export function CashCloseView({ profile, showToast }: {
                   <button
                     type="button"
                     onClick={() => setCounted(String(expected))}
-                    className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
+                    className="text-[10px] font-extrabold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 underline cursor-pointer"
                   >
                     Usar esperado
                   </button>
@@ -543,12 +543,12 @@ export function CashCloseView({ profile, showToast }: {
                 Guardá de nuevo para actualizarlo.
               </p>
             ) : existing ? (
-              <p className="text-[11px] font-semibold text-emerald-600">
+              <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                 Cierre guardado el {closeSavedLabel}. Sin movimientos posteriores.
               </p>
             ) : null}
 
-            <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${hasCount && countValid && diff === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : hasCount && diff !== 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}>
+            <div className={`rounded-2xl p-3 text-center font-extrabold tabular-nums ${hasCount && countValid && diff === 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : hasCount && diff !== 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300'}`}>
               Diferencia: {!hasCount ? '—' : !countValid ? 'importe inválido' : money(diff)} {hasCount && countValid && (diff === 0 ? '✓ Cuadra' : diff > 0 ? '(sobrante)' : '(faltante)')}
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -573,9 +573,9 @@ export function CashCloseView({ profile, showToast }: {
       )}
 
       <div data-tour="cashclose-history" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-1.5">
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Últimos cierres</p>
+        <p className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Últimos cierres</p>
         {history.length === 0 ? (
-          <p className="text-sm text-slate-400 font-semibold">Todavía no hay cierres.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold">Todavía no hay cierres.</p>
         ) : history.map((h) => (
           <div key={h.id} className="flex justify-between items-center py-2 border-b last:border-0 border-slate-100 dark:border-[#2a2a2a] text-sm">
             <div>

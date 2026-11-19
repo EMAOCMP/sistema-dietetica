@@ -58,17 +58,17 @@ export function SelectMenu({ value, options, onChange, ariaLabel, width = 'w-44'
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        className={`flex items-center gap-1.5 px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold bg-white dark:bg-[#232323] text-slate-900 dark:text-white cursor-pointer hover:border-slate-300 dark:hover:border-[#444444] transition ${fullWidth ? 'w-full justify-between' : ''}`}
+        className={`flex items-center gap-1.5 px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold bg-white dark:bg-[#232323] text-slate-900 dark:text-white cursor-pointer hover:border-slate-300 dark:hover:border-[#444444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 transition ${fullWidth ? 'w-full justify-between' : ''}`}
       >
-        {current?.icon ? <span className="shrink-0 text-slate-400">{current.icon}</span> : null}
+        {current?.icon ? <span className="shrink-0 text-slate-500 dark:text-slate-400">{current.icon}</span> : null}
         <span className="truncate">{current?.label ?? String(value)}</span>
-        <ChevronDown size={13} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} className={`shrink-0 text-slate-500 dark:text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div
           role="listbox"
           aria-label={ariaLabel}
-          className={`absolute z-50 mt-1 ${width} ${align === 'right' ? 'right-0' : 'left-0'} bg-white dark:bg-[#1F1F1F] rounded-xl shadow-xl border border-slate-200 dark:border-[#333333] p-1 max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-150 ${fullWidth ? 'w-full left-0' : ''}`}
+          className={`absolute z-50 mt-1 ${width} ${align === 'right' ? 'right-0' : 'left-0'} bg-white dark:bg-[#1F1F1F] rounded-xl shadow-xl ring-1 ring-slate-900/5 dark:ring-white/5 border border-slate-200 dark:border-[#333333] p-1 max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 duration-150 ${fullWidth ? 'w-full left-0' : ''}`}
         >
           {options.map((o) => (
             <button
@@ -79,16 +79,16 @@ export function SelectMenu({ value, options, onChange, ariaLabel, width = 'w-44'
               onClick={() => { onChange(o.value); setOpen(false); }}
               className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-left rounded-lg transition ${
                 o.value === value
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 font-bold'
+                  ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300 font-bold'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
               <span className="flex items-center gap-2 min-w-0">
-                {o.icon ? <span className={`shrink-0 ${o.value === value ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400'}`}>{o.icon}</span> : null}
+                {o.icon ? <span className={`shrink-0 ${o.value === value ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>{o.icon}</span> : null}
                 <span className="min-w-0">
                   <span className="block truncate">{o.label}</span>
                   {o.hint ? (
-                    <span className={`block truncate text-[10px] font-semibold ${o.value === value ? 'text-emerald-600/80 dark:text-emerald-300/70' : 'text-slate-400 dark:text-slate-500'}`}>
+                    <span className={`block truncate text-[10px] font-semibold ${o.value === value ? 'text-emerald-700 dark:text-emerald-300/80' : 'text-slate-500 dark:text-slate-400'}`}>
                       {o.hint}
                     </span>
                   ) : null}
