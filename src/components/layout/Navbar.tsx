@@ -138,7 +138,8 @@ export function Navbar({
     <>
       {/* Sidebar — Campify Dark x Premium SaaS (plegable a demanda) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex-shrink-0 flex flex-col transition-all duration-300 lg:static lg:translate-x-0 dark:bg-obsidian-800 dark:border-obsidian-700 ${
+        data-tour="sidebar"
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex-shrink-0 flex flex-col transition-all duration-300 lg:sticky lg:inset-y-auto lg:top-0 lg:h-screen lg:translate-x-0 dark:bg-obsidian-800 dark:border-obsidian-700 ${
           collapsed ? 'lg:w-20' : 'lg:w-64'
         } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
@@ -179,7 +180,7 @@ export function Navbar({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar" data-tour="sidebar">
+        <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
           {!collapsed && <div className="px-6 pb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider dark:text-zinc-400">Principal</div>}
           <ul className="space-y-1 px-3">
             {navItems.slice(0, 3).map(renderItem)}

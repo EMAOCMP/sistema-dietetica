@@ -242,6 +242,15 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [viewKey, setViewKey] = useState(0);
 
+  // El scroll de la app puede vivir en <main> o en la ventana según el layout.
+  // Al cambiar de vista hay que volver arriba: si no, la vista nueva arranca
+  // a mitad de página.
+  const mainRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  }, [activeTab, viewKey]);
+
   // ⌘K / Ctrl+K global
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -379,7 +388,7 @@ export function App() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative pb-[76px] lg:pb-24">
+        <main ref={mainRef} className="flex-1 overflow-y-auto relative pb-[76px] lg:pb-24">
           <div key={activeTab} className="view-fade min-h-full">
             {activeTab === 'dashboard' && <DashboardView setActiveTab={setActiveTab} profile={profile} showToast={showToast} />}
             {activeTab === 'products' && (

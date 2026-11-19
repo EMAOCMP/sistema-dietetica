@@ -43,7 +43,12 @@ export function computeTipBox(
   const targetRight = target.left + target.width;
   const targetBottom = target.top + target.height;
 
-  const candidates = order.map((side) => {
+  // Si el objetivo ocupa casi todo el ancho no hay costado real: la tarjeta
+  // tiene que ir arriba o abajo, centrada. Evita que caiga sobre la sidebar.
+  const wideTarget = target.width > viewportW * 0.55;
+  const sides = order.filter((side) => !(wideTarget && (side === 'left' || side === 'right')));
+
+  const candidates = sides.map((side) => {
     let left: number;
     let top: number;
     if (side === 'bottom' || side === 'top') {

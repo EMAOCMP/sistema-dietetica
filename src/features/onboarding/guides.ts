@@ -20,15 +20,15 @@ export interface GuideSection {
 
 /** Metadatos de las secciones que se muestran en el Centro de guías. */
 export const GUIDE_SECTIONS: GuideSection[] = [
-  { id: 'dashboard', title: 'Panel principal', desc: 'KPIs, rango de fechas, acciones rápidas y checklist de inicio.', level: 'esencial', minutes: 1 },
+  { id: 'dashboard', title: 'Panel principal', desc: 'KPIs, rango de fechas, acciones rápidas, checklist, tendencias, pagos, top productos, rentabilidad, horarios y stock crítico.', level: 'esencial', minutes: 2 },
   { id: 'pos', title: 'Caja / POS', desc: 'Buscar, escanear, pesar, carrito, descuentos y cobrar.', level: 'esencial', minutes: 2 },
   { id: 'products', title: 'Productos y stock', desc: 'Alta, precios, márgenes, filtros, importación y exportación.', level: 'esencial', minutes: 2 },
   { id: 'intake', title: 'Ingreso de stock', desc: 'Compras a proveedores: borrador, escaneo y confirmación.', level: 'basico', minutes: 1 },
   { id: 'purchaseorders', title: 'Órdenes de compra', desc: 'Reposición sugerida por stock y ventas; borrador, envío y recepción.', level: 'basico', minutes: 2 },
   { id: 'history', title: 'Pedidos e historial', desc: 'Filtrar ventas, ver el detalle, reimprimir y anular.', level: 'basico', minutes: 1 },
   { id: 'activity', title: 'Mi actividad', desc: 'Tus ventas y movimientos de stock, solo lo que hiciste vos.', level: 'basico', minutes: 1 },
-  { id: 'cashclose', title: 'Cierre de caja', desc: 'Conteo, diferencias, historial de cierres e impresión.', level: 'avanzado', minutes: 1 },
-  { id: 'reports', title: 'Reportes', desc: 'Rentabilidad, categorías y exportación a PDF/Excel.', level: 'avanzado', minutes: 1 },
+  { id: 'cashclose', title: 'Cierre de caja', desc: 'Fondo, retiros, gastos, conteo, diferencias e impresión del cierre.', level: 'avanzado', minutes: 2 },
+  { id: 'reports', title: 'Reportes', desc: 'Rentabilidad, gastos del negocio, ganancia neta y exportación a PDF/Excel.', level: 'avanzado', minutes: 2 },
   { id: 'users', title: 'Usuarios y permisos', desc: 'Roles, permisos granulares y actividad del equipo.', level: 'avanzado', minutes: 1 },
   { id: 'settings', title: 'Configuración', desc: 'Datos del negocio, IVA, Mercado Pago, respaldos y ayuda.', level: 'avanzado', minutes: 1 },
 ];
@@ -113,13 +113,54 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="dashboard-charts"]',
     title: 'Tendencias y categorías',
-    body: 'Mirá cómo evolucionan las ventas y qué categorías dejan más margen.',
+    body: 'Mirá cómo evolucionan las ventas por hora o por día. Más abajo, la rentabilidad por categoría te dice qué deja más margen.',
     placement: 'top',
     view: 'dashboard',
     level: 'basico',
   },
+  {
+    selector: '[data-tour="dashboard-payments"]',
+    title: 'Distribución de Pagos',
+    body: 'Mirá qué porcentaje de las ventas se cobra en efectivo, tarjeta, transferencia o Mercado Pago. Útil para decidir si conviene ofrecer descuentos por pago en efectivo.',
+    placement: 'top',
+    view: 'dashboard',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="dashboard-topsellers"]',
+    title: 'Top 10 Productos Estrella',
+    body: 'Los productos que más facturan o más se venden. Tocá uno para ver su detalle y ajustar precio o stock. Ideal para armar promos o reposición.',
+    placement: 'top',
+    view: 'dashboard',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="dashboard-categories"]',
+    title: 'Rentabilidad por Categoría',
+    body: 'Qué categorías dejan más margen. Si una categoría vende mucho pero deja poco margen, conviene revisar precios o costos.',
+    placement: 'top',
+    view: 'dashboard',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="dashboard-hourly"]',
+    title: 'Horarios Pico',
+    body: 'En qué franjas horarias se concentra la venta. Útil para planificar turnos de personal y promociones por horario.',
+    placement: 'top',
+    view: 'dashboard',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="dashboard-stock"]',
+    title: 'Stock Crítico',
+    body: 'Cantidad de productos por debajo del mínimo. Tocá para ver cuáles son y reponerlos. Se actualiza en tiempo real.',
+    placement: 'top',
+    view: 'dashboard',
+    level: 'avanzado',
+  },
 
   // ── POS ─────────────────────────────────────────────────────────
+
   {
     selector: '[data-tour="pos-search"]',
     title: 'Buscar o escanear',
@@ -173,7 +214,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="products-toolbar"]',
     title: 'Buscador y vista',
-    body: 'Buscá por nombre o código, cambiá la densidad y guardá filtros para volver más rápido.',
+    body: 'Buscá por nombre, código de barras o categoría. La densidad y los filtros guardados están en la barra de abajo.',
     placement: 'bottom',
     view: 'products',
     level: 'esencial',
@@ -309,9 +350,17 @@ export const TOUR_STEPS: TourStep[] = [
     level: 'avanzado',
   },
   {
+    selector: '[data-tour="cashclose-movements"]',
+    title: 'Efectivo del día',
+    body: 'Cargá el fondo inicial, ingresos y retiros. Los gastos en efectivo del reporte se descuentan solos y ves el esperado antes de guardar.',
+    placement: 'top',
+    view: 'cashclose',
+    level: 'avanzado',
+  },
+  {
     selector: '[data-tour="cashclose-count"]',
     title: 'Conteo y diferencia',
-    body: 'Ingresá el efectivo contado. La app calcula sobrante o faltante al instante.',
+    body: 'Ingresá el efectivo contado (o usá el esperado). La app calcula sobrante o faltante al instante y avisa si el cierre quedó viejo por ventas posteriores.',
     placement: 'top',
     view: 'cashclose',
     level: 'avanzado',
@@ -319,7 +368,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="cashclose-history"]',
     title: 'Cierres anteriores',
-    body: 'Consultá cierres pasados y detectá diferencias recurrentes.',
+    body: 'Consultá cierres pasados y detectá diferencias recurrentes. Si guardaste antes de tiempo, podés actualizar el cierre del mismo día.',
     placement: 'top',
     view: 'cashclose',
     level: 'avanzado',
@@ -329,7 +378,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="reports-kpis"]',
     title: 'Métricas del negocio',
-    body: 'Facturación, costo, ganancia y margen del período. Compará contra el período anterior.',
+    body: 'Tickets, facturación, ganancia bruta, gastos, ganancia neta y margen del período, con la variación contra el período anterior.',
     placement: 'bottom',
     view: 'reports',
     level: 'avanzado',
@@ -337,8 +386,16 @@ export const TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="reports-range"]',
     title: 'Rango de análisis',
-    body: 'Cambiá el período y los gráficos se recalculan. Ideal para cerrar el mes.',
+    body: 'Cambiá el período (día, semana o mes) y todos los números se recalculan. Ideal para cerrar el mes.',
     placement: 'bottom',
+    view: 'reports',
+    level: 'avanzado',
+  },
+  {
+    selector: '[data-tour="reports-expenses"]',
+    title: 'Gastos del negocio',
+    body: 'Cargá alquiler, servicios o sueldos con su categoría y medio de pago. Se restan de la ganancia bruta para darte la ganancia neta real.',
+    placement: 'top',
     view: 'reports',
     level: 'avanzado',
   },

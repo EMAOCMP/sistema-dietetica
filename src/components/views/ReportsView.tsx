@@ -479,7 +479,7 @@ export function ReportsView({ profile, showToast }: {
       )}
 
       {/* Gastos */}
-      <div className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
+      <div data-tour="reports-expenses" className="bg-white dark:bg-[#1F1F1F] rounded-3xl border border-slate-200 dark:border-[#333333] p-4 space-y-3">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gastos del negocio</p>
         {!expensesAvailable ? (
           <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-3 text-xs font-semibold text-amber-700 dark:text-amber-400">

@@ -1400,6 +1400,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
 
         {/* Stock crítico */}
         <div
+          data-tour="dashboard-stock"
           onClick={() => setActiveModal('stock')}
           className="rounded-2xl p-5 border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer relative overflow-hidden bg-white shadow-card border-red-500/30 bg-gradient-to-br from-white to-red-50/60 hover:border-red-400 dark:bg-none dark:bg-obsidian-800/60 dark:border-accent-orange/20 dark:backdrop-blur-xl group"
         >
@@ -1442,8 +1443,9 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         if (doneCount === steps.length) return null;
         const pct = Math.round((doneCount / steps.length) * 100);
         return (
-        <div data-tour="dashboard-checklist" className="bg-gradient-to-br from-brand-600 to-brand-800 border border-brand-500/50 rounded-2xl p-4 sm:p-6 shadow-glow-brand relative overflow-hidden transition-all duration-300">
+        <div className="bg-gradient-to-br from-brand-600 to-brand-800 border border-brand-500/50 rounded-2xl p-4 sm:p-6 shadow-glow-brand relative overflow-hidden transition-all duration-300">
           <Award className="absolute -right-6 -bottom-6 text-9xl text-white/5 transform -rotate-12 pointer-events-none" size={120} />
+          <div data-tour="dashboard-checklist">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4 relative z-10">
             <div>
               <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
@@ -1469,6 +1471,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
             <div className="w-full h-2 bg-black/20 rounded-full overflow-hidden">
               <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300 transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
+          </div>
           </div>
 
           <div className="space-y-2.5 relative z-10">
@@ -1513,7 +1516,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       })()}
 
       {/* Gráfico de Tendencia de Ventas */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
+      <div data-tour="dashboard-charts" className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
           <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <TrendingUp className="text-sky-600" size={18} />
@@ -1525,7 +1528,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
       </div>
 
       {/* Desglose de Formas de Pago */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
+      <div data-tour="dashboard-payments" className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
         <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
           <CurrencyDollar className="text-emerald-600" size={18} />
           Distribución de Pagos
@@ -1543,7 +1546,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
 
       {/* Top Clientes */}
       {topCustomers.length > 0 && (
-      <div data-tour="dashboard-charts" className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Receipt className="text-violet-600" size={18} />
@@ -1630,6 +1633,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div
+          data-tour="dashboard-topsellers"
           onClick={() => setActiveModal('bestSellers')}
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
         >
@@ -1657,6 +1661,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         </div>
 
         <div
+          data-tour="dashboard-categories"
           onClick={() => setActiveModal('categories')}
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
         >
@@ -1684,6 +1689,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         </div>
 
         <div
+          data-tour="dashboard-hourly"
           onClick={() => setActiveModal('hourly')}
           className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
         >

@@ -9,6 +9,11 @@ interface Rect { top: number; left: number; width: number; height: number; radiu
 const PAD = 8;
 const TIP_WIDTH = 340;
 const CARET = 12;
+/** Aire entre el objetivo y la tarjeta. */
+const GAP = 16;
+/** Bajo el header fijo de la app (h-16) más un respiro. */
+const TOP_SAFE = 76;
+const BOTTOM_SAFE = 16;
 /** Borde visible del halo índigo alrededor del elemento resaltado. */
 const RING = '0 0 0 2px rgba(99,102,241,0.95), 0 0 0 7px rgba(99,102,241,0.22)';
 const SCRIM = '0 0 0 9999px rgba(2,6,23,0.68)';
@@ -56,6 +61,112 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/** Primer contenedor con scroll propio que contiene al objetivo (en la app es <main>). */
+function findScrollParent(el: Element): HTMLElement | null {
+  let node = el.parentElement;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 1) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+interface Scroller {
+  node: HTMLElement | null;
+  current: number;
+  max: number;
+}
+
+/** Contenedor real de scroll del objetivo (o la ventana si scrollea el documento). */
+function getScroller(el: Element): Scroller {
+  const node = findScrollParent(el);
+  if (node) {
+    return {
+      node,
+      current: node.scrollTop,
+      max: Math.max(0, node.scrollHeight - node.clientHeight),
+    };
+  }
+  const doc = document.scrollingElement || document.documentElement;
+  return {
+    node: null,
+    current: window.scrollY,
+    max: Math.max(0, doc.scrollHeight - window.innerHeight),
+  };
+}
+
+function applyScroll(scroller: Scroller, next: number): number {
+  const value = clamp(Math.round(next), 0, scroller.max);
+  if (scroller.node) scroller.node.scrollTop = value;
+  else window.scrollTo(0, value);
+  return value;
+}
+
+/**
+ * Acomoda el scroll para que el objetivo entre a la vista y quede lugar para la
+ * tarjeta, y devuelve el lado que realmente se puede usar. Si el lado pedido no
+ * entra (por ejemplo "arriba" cuando la página ya está al tope) prueba el otro,
+ * así la tarjeta nunca queda montada sobre el elemento resaltado.
+ */
+function fitTarget(el: Element, requested: TipPlacement, cardW: number, cardH: number): TipPlacement {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const safeTop = TOP_SAFE;
+  const safeBottom = vh - BOTTOM_SAFE;
+  const r = el.getBoundingClientRect();
+  const scroller = getScroller(el);
+
+  // Header y barra lateral quedan siempre a la vista: no movemos la página por ellos.
+  if (!el.closest('main') && !scroller.node) return requested;
+
+  // Devuelve el top resultante después de aplicar el scroll pedido.
+  const scrollToTop = (desiredTop: number) => {
+    const next = clamp(scroller.current + (r.top - desiredTop), 0, scroller.max);
+    const applied = applyScroll(scroller, next);
+    return r.top - (applied - scroller.current);
+  };
+
+  const verticalFits = (side: 'top' | 'bottom', top: number) => {
+    if (top < safeTop - 1 || top > safeBottom - 1) return false;
+    return side === 'bottom'
+      ? top + r.height <= safeBottom - cardH - GAP + 1
+      : top >= safeTop + cardH + GAP - 1;
+  };
+
+  const placeVertical = (side: 'top' | 'bottom') => ({
+    side,
+    top: scrollToTop(side === 'bottom' ? safeTop : safeTop + cardH + GAP),
+  });
+
+  if (requested === 'left' || requested === 'right') {
+    const room = requested === 'right' ? vw - (r.left + r.width) : r.left;
+    if (room >= cardW + GAP) {
+      // Hay costado: centramos verticalmente lo mejor posible.
+      const centered = (safeTop + safeBottom - r.height) / 2;
+      scrollToTop(clamp(centered, safeTop, Math.max(safeTop, safeBottom - r.height)));
+      return requested;
+    }
+  }
+
+  const first: 'top' | 'bottom' = requested === 'top' ? 'top' : 'bottom';
+  const second: 'top' | 'bottom' = first === 'top' ? 'bottom' : 'top';
+
+  const attempt = placeVertical(first);
+  if (verticalFits(first, attempt.top)) return first;
+
+  const other = placeVertical(second);
+  if (verticalFits(second, other.top)) return second;
+
+  // No hay forma de esquivarlo: dejamos el bloque lo más arriba posible y que
+  // computeTipBox elija dónde superpone menos.
+  scrollToTop(safeTop);
+  return first;
+}
+
 interface ProductTourProps {
   activeTab: string;
   onNavigate: (tab: string) => void;
@@ -69,6 +180,7 @@ interface ProductTourProps {
 export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
   const { tourOpen, tourStep, activeGuide, nextStep, prevStep, endTour } = useOnboarding();
   const [rect, setRect] = useState<Rect | null>(null);
+  const [side, setSide] = useState<TipPlacement | null>(null);
   const [tipPos, setTipPos] = useState<{ left: number; top: number; side: TipPlacement } | null>(null);
   const [tipSize, setTipSize] = useState<{ w: number; h: number } | null>(null);
   const [isMobile, setIsMobile] = useState(
@@ -95,39 +207,65 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
     }
   }, [tourOpen, step, activeTab, onNavigate]);
 
-  // Medir con reintentos (vistas lazy) y hacer scroll si el elemento está fuera de pantalla.
+  // Medir con reintentos (vistas lazy): primero acomoda el scroll para que el
+  // objetivo entre entero y con lugar para la tarjeta; después sigue midiendo
+  // un segundo por si el contenido carga tarde y mueve el layout.
   useEffect(() => {
     if (!tourOpen || !step) return;
     let cancelled = false;
     let tries = 0;
-    let scrolled = false;
     let timer: number | undefined;
 
-    const tick = () => {
+    // Evita que quede el spotlight del paso anterior mientras carga el nuevo.
+    setRect(null);
+    setSide(null);
+    setTipPos(null);
+
+    const sameRect = (a: Rect, b: Rect) =>
+      Math.abs(a.top - b.top) < 1
+      && Math.abs(a.left - b.left) < 1
+      && Math.abs(a.width - b.width) < 1
+      && Math.abs(a.height - b.height) < 1;
+
+    // Mide, acomoda el scroll y actualiza el rect. fitTarget es idempotente.
+    const measure = () => {
       if (cancelled) return;
       const el = findVisible(step.selector);
-      if (el) {
-        const r = el.getBoundingClientRect();
-        const outside = r.top < 88 || r.bottom > window.innerHeight - 96;
-        if (outside && !scrolled) {
-          scrolled = true;
-          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* noop */ }
-          timer = window.setTimeout(tick, 340);
+      if (!el) {
+        tries += 1;
+        if (tries > 22) {
+          nextStep();
           return;
         }
-        setRect(rectOf(el));
         return;
       }
-      tries += 1;
-      if (tries > 22) {
-        nextStep();
-        return;
-      }
-      timer = window.setTimeout(tick, 100);
+      tries = 0;
+      const cardW = cardRef.current?.offsetWidth || TIP_WIDTH;
+      const cardH = cardRef.current?.offsetHeight || 260;
+      const chosen = fitTarget(el, step.placement ?? 'bottom', cardW, cardH);
+      setSide((prev) => (prev === chosen ? prev : chosen));
+      const next = rectOf(el);
+      setRect((prev) => (prev && sameRect(prev, next) ? prev : next));
     };
 
-    timer = window.setTimeout(tick, 90);
-    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+    // Primer intento rápido.
+    timer = window.setTimeout(() => {
+      if (cancelled) return;
+      measure();
+    }, 90);
+
+    // Seguimos re-midiendo un rato por si el contenido carga tarde y mueve el
+    // layout (datos asíncronos, fuentes, etc.). Cada tick es idempotente.
+    const interval = window.setInterval(() => {
+      if (cancelled) return;
+      measure();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
   }, [tourOpen, step, activeTab, nextStep]);
 
   // Posicionar la tarjeta: mide su tamaño real y la deja al costado del objetivo.
@@ -138,11 +276,18 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
       if (!el || !step) return;
       const w = el.offsetWidth || TIP_WIDTH;
       const h = el.offsetHeight || 200;
-      const box = computeTipBox(rect, step.placement ?? 'bottom', w, h, window.innerWidth, window.innerHeight);
+      const vh = window.innerHeight;
+      const visibleTop = Math.max(rect.top, 0);
+      const visibleBottom = Math.min(rect.top + rect.height, vh);
+      const visible = {
+        top: visibleTop,
+        left: rect.left,
+        width: rect.width,
+        height: Math.max(1, visibleBottom - visibleTop),
+      };
+      const box = computeTipBox(visible, side ?? step.placement ?? 'bottom', w, h, window.innerWidth, vh);
       setTipSize((prev) => (prev && prev.w === w && prev.h === h ? prev : { w, h }));
-      setTipPos((prev) =>
-        prev && prev.left === box.left && prev.top === box.top && prev.side === box.side ? prev : box,
-      );
+      setTipPos(box);
     };
     place();
     const el = cardRef.current;
@@ -150,7 +295,7 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
     const ro = new ResizeObserver(place);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tourOpen, rect, step, isMobile]);
+  }, [tourOpen, rect, side, step, isMobile]);
 
   const measure = useCallback(() => {
     setIsMobile(window.innerWidth < 640);
@@ -171,12 +316,20 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
     if (tourOpen && steps.length > 0 && tourStep >= steps.length) endTour();
   }, [tourOpen, steps, tourStep, endTour]);
 
-  // Bloquear el scroll de la página mientras el recorrido está abierto.
+  // Bloquear el scroll de la página mientras el recorrido está abierto. Se
+  // compensa el ancho de la barra para que nada se corra al abrir/cerrar.
   useEffect(() => {
     if (!tourOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    const previousPadding = body.style.paddingRight;
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+    body.style.overflow = 'hidden';
+    if (gap > 0) body.style.paddingRight = `${gap}px`;
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPadding;
+    };
   }, [tourOpen]);
 
   // Foco accesible: al abrir guardamos el foco y lo devolvemos al cerrar.
@@ -215,15 +368,29 @@ export function ProductTour({ activeTab, onNavigate }: ProductTourProps) {
         opacity: tipPos ? 1 : 0,
       };
 
+  // El spotlight se recorta al viewport: si el bloque es más alto que la
+  // pantalla, el halo cierra contra el borde en vez de perderse fuera de vista.
   const spotlight = rect
-    ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
+    ? (() => {
+        const vh = window.innerHeight;
+        const top = Math.max(rect.top - PAD, 2);
+        const bottom = Math.min(rect.top + rect.height + PAD, vh - 2);
+        return {
+          top,
+          left: rect.left - PAD,
+          width: rect.width + PAD * 2,
+          height: Math.max(0, bottom - top),
+        };
+      })()
     : null;
   // Flecha que conecta la tarjeta con el elemento resaltado.
   let caret: { className: string; style: React.CSSProperties } | null = null;
   if (!isMobile && tipPos && tipSize && rect) {
     const side = tipPos.side;
     const targetCx = rect.left + rect.width / 2;
-    const targetCy = rect.top + rect.height / 2;
+    const visibleTop = Math.max(rect.top, 0);
+    const visibleBottom = Math.min(rect.top + rect.height, window.innerHeight);
+    const targetCy = (visibleTop + visibleBottom) / 2;
     const edge = -CARET / 2;
     const limitH = tipSize.w - CARET - 12;
     const limitV = tipSize.h - CARET - 12;

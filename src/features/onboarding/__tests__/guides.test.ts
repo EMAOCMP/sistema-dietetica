@@ -41,6 +41,23 @@ describe('guides', () => {
     }
   });
 
+  // Anclas que existen a propósito sin paso propio:
+  // `shortcuts` vive dentro del buscador y ya lo explica el paso "Búsqueda global".
+  const ANCHORS_WITHOUT_STEP = new Set(['shortcuts']);
+
+  it('no hay anclas de tour huérfanas', () => {
+    const anchors = new Set(
+      Array.from(allSources.matchAll(/data-tour="([^"]+)"/g), (m) => m[1]),
+    );
+    const steps = new Set(TOUR_STEPS.map((s) => selectorValue(s.selector)));
+
+    for (const anchor of anchors) {
+      if (ANCHORS_WITHOUT_STEP.has(anchor)) continue;
+      expect(steps.has(anchor), `El ancla data-tour="${anchor}" no tiene paso en el tour`)
+        .toBe(true);
+    }
+  });
+
   it('cada sección del centro de guías tiene al menos un paso', () => {
     for (const section of GUIDE_SECTIONS) {
       expect(guideSteps(section.id).length, `La sección "${section.id}" no tiene pasos`)
