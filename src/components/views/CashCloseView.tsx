@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../types';
-import { Calculator, Loader2, Plus, Printer, Save, Shield, Trash2 } from 'lucide-react';
+import { Calculator, Loader2, Plus, Printer, Save, Shield, Trash2, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { canCloseCash } from '../../lib/permissions';
 import { fmtMoney } from '../../lib/format';
 import { moneyOrZero, parseMoney } from '../../lib/moneyInput';
+import { SelectMenu } from '../ui/SelectMenu';
+import type { SelectMenuOption } from '../ui/SelectMenu';
 
 interface CloseRow {
   id: string;
@@ -42,6 +44,28 @@ const MOVEMENT_LABELS: Record<CashMovement['type'], string> = {
   in: 'Ingreso de efectivo',
   out: 'Retiro / pago en efectivo',
 };
+
+/** Opciones del selector "Tipo": con ícono y explicación de qué hace cada una. */
+const MOVEMENT_OPTIONS: SelectMenuOption[] = [
+  {
+    value: 'opening',
+    label: 'Fondo inicial',
+    hint: 'La plata que ya está en el cajón al abrir',
+    icon: <Wallet size={14} />,
+  },
+  {
+    value: 'in',
+    label: 'Ingreso de efectivo',
+    hint: 'Entra plata: cambio, cobro aparte',
+    icon: <ArrowDownLeft size={14} />,
+  },
+  {
+    value: 'out',
+    label: 'Retiro / pago',
+    hint: 'Sale plata: retiro, flete, proveedor',
+    icon: <ArrowUpRight size={14} />,
+  },
+];
 
 /**
  * Cierre de caja (admin/supervisor): esperado del día vs contado real.
@@ -194,6 +218,16 @@ export function CashCloseView({ profile, showToast }: {
     })
     : '';
 
+  // Vista previa: cómo queda el esperado con el movimiento que se está cargando.
+  const movAmountNum = moneyOrZero(movAmount);
+  const movPreview = movAmountNum > 0
+    ? (movType === 'opening' && openingRow
+      ? expected - Number(openingRow.amount) + movAmountNum
+      : movType === 'out'
+        ? expected - movAmountNum
+        : expected + movAmountNum)
+    : null;
+
   const handleAddMovement = async () => {
     if (!canClose) return;
     const amount = moneyOrZero(movAmount);
@@ -234,6 +268,8 @@ export function CashCloseView({ profile, showToast }: {
       notify('Movimiento de efectivo guardado.', 'success');
       setMovAmount('');
       setMovNote('');
+      // Después de fijar el fondo, lo habitual es un retiro o un gasto.
+      if (movType === 'opening') setMovType('out');
       fetchDay();
     } catch (e: any) {
       notify(`Error: ${e?.message || e}`, 'error');
@@ -365,17 +401,19 @@ export function CashCloseView({ profile, showToast }: {
             </div>
 
             <div className="grid sm:grid-cols-12 gap-2 items-end">
-              <label className="text-[11px] font-bold text-slate-500 sm:col-span-4">Tipo
-                <select
-                  value={movType}
-                  onChange={(e) => setMovType(e.target.value as CashMovement['type'])}
-                  className="mt-0.5 w-full px-2.5 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-[#232323] focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="opening">Fondo inicial</option>
-                  <option value="in">Ingreso de efectivo</option>
-                  <option value="out">Retiro / pago</option>
-                </select>
-              </label>
+              <div className="text-[11px] font-bold text-slate-500 sm:col-span-4">
+                <span className="block">Tipo</span>
+                <div className="mt-0.5">
+                  <SelectMenu
+                    value={movType}
+                    options={MOVEMENT_OPTIONS}
+                    onChange={(v) => setMovType(v as CashMovement['type'])}
+                    ariaLabel="Tipo de movimiento de efectivo"
+                    width="w-72"
+                    fullWidth
+                  />
+                </div>
+              </div>
               <label className="text-[11px] font-bold text-slate-500 sm:col-span-3">Monto
                 <input
                   type="text" inputMode="decimal" autoComplete="off"
@@ -398,9 +436,20 @@ export function CashCloseView({ profile, showToast }: {
                 disabled={savingMov}
                 className="sm:col-span-2 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white rounded-xl text-xs font-extrabold transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
               >
-                {savingMov ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Agregar
+                {savingMov ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                {movType === 'opening' ? 'Fijar' : movType === 'in' ? 'Ingresar' : 'Retirar'}
               </button>
             </div>
+
+            <p className="text-[11px] font-semibold text-slate-500">
+              {MOVEMENT_OPTIONS.find((o) => o.value === movType)?.hint}.
+              {movPreview !== null && (
+                <span className={`font-extrabold ${movPreview < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                  {' '}Con este movimiento el esperado queda en {money(movPreview)}
+                  {movPreview < 0 ? ' — negativo, revisá el monto' : ''}.
+                </span>
+              )}
+            </p>
 
             {movType === 'opening' && openingRow && (
               <p className="text-[11px] font-semibold text-amber-600">

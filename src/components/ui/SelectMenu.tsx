@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
 export interface SelectMenuOption {
   value: string | number;
   label: string;
+  /** Ícono opcional a la izquierda del texto. */
+  icon?: ReactNode;
+  /** Texto secundario debajo del label, solo visible en el panel. */
+  hint?: string;
 }
 
 interface SelectMenuProps {
@@ -55,6 +60,7 @@ export function SelectMenu({ value, options, onChange, ariaLabel, width = 'w-44'
         aria-label={ariaLabel}
         className={`flex items-center gap-1.5 px-3 py-2 border-2 border-slate-200 dark:border-[#333333] rounded-xl text-xs font-bold bg-white dark:bg-[#232323] text-slate-900 dark:text-white cursor-pointer hover:border-slate-300 dark:hover:border-[#444444] transition ${fullWidth ? 'w-full justify-between' : ''}`}
       >
+        {current?.icon ? <span className="shrink-0 text-slate-400">{current.icon}</span> : null}
         <span className="truncate">{current?.label ?? String(value)}</span>
         <ChevronDown size={13} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -71,13 +77,23 @@ export function SelectMenu({ value, options, onChange, ariaLabel, width = 'w-44'
               role="option"
               aria-selected={o.value === value}
               onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs font-medium text-left rounded-lg transition ${
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-left rounded-lg transition ${
                 o.value === value
                   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 font-bold'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'
               }`}
             >
-              <span className="truncate">{o.label}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                {o.icon ? <span className={`shrink-0 ${o.value === value ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-400'}`}>{o.icon}</span> : null}
+                <span className="min-w-0">
+                  <span className="block truncate">{o.label}</span>
+                  {o.hint ? (
+                    <span className={`block truncate text-[10px] font-semibold ${o.value === value ? 'text-emerald-600/80 dark:text-emerald-300/70' : 'text-slate-400 dark:text-slate-500'}`}>
+                      {o.hint}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
               {o.value === value && <Check size={13} className="shrink-0" />}
             </button>
           ))}
