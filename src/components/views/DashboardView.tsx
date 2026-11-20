@@ -144,6 +144,8 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
   const [quickSearch, setQuickSearch] = useState('');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [expiringProducts, setExpiringProducts] = useState<Product[]>([]);
+  // Timestamp estable para los días de vencimiento (evita Date.now durante el render).
+  const [expiringNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [alertDismissed, setAlertDismissed] = useState(false);
 
@@ -291,35 +293,11 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
   };
 
   const activeModalRef = useRef(activeModal);
-  activeModalRef.current = activeModal;
+  // El intervalo y los listeners toman siempre la última versión del fetch
+  // sin recrearse en cada render (y sin capturar un closure viejo).
+  const fetchRef = useRef<((silent?: boolean) => Promise<void>) | null>(null);
 
-  useEffect(() => {
-    fetchDashboardData();
-    const id = setInterval(() => {
-      // No refrescar con un modal abierto: evita que la lista cambie bajo el usuario
-      if (activeModalRef.current) return;
-      fetchDashboardData(true);
-    }, 30000);
-    // Venta registrada en esta sesión (POS/anulación) → refetch silencioso
-    const onSaleEvent = () => {
-      const t = Date.now();
-      if (t - lastGoalFetchRef.current < 3000) return;
-      lastGoalFetchRef.current = t;
-      fetchDashboardData(true);
-    };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && !activeModalRef.current) fetchDashboardData(true);
-    };
-    window.addEventListener('dv:sale-completed', onSaleEvent);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener('dv:sale-completed', onSaleEvent);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-    // customRange incluido: elegir fechas dispara la recarga del período
-    // profile incluido: el filtro por vendedor depende del rol resuelto
-  }, [dateRange, customRange, profile?.id]);
+  useEffect(() => { activeModalRef.current = activeModal; });
 
   const fetchDashboardData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -633,8 +611,35 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
     }
   };
 
-  const fetchRef = useRef(fetchDashboardData);
   useEffect(() => { fetchRef.current = fetchDashboardData; });
+
+  useEffect(() => {
+    void fetchRef.current?.();
+    const id = setInterval(() => {
+      // No refrescar con un modal abierto: evita que la lista cambie bajo el usuario
+      if (activeModalRef.current) return;
+      void fetchRef.current?.(true);
+    }, 30000);
+    // Venta registrada en esta sesión (POS/anulación) → refetch silencioso
+    const onSaleEvent = () => {
+      const t = Date.now();
+      if (t - lastGoalFetchRef.current < 3000) return;
+      lastGoalFetchRef.current = t;
+      void fetchRef.current?.(true);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !activeModalRef.current) void fetchRef.current?.(true);
+    };
+    window.addEventListener('dv:sale-completed', onSaleEvent);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('dv:sale-completed', onSaleEvent);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // customRange incluido: elegir fechas dispara la recarga del período
+    // profile incluido: el filtro por vendedor depende del rol resuelto
+  }, [dateRange, customRange, profile?.id]);
 
   // Tiempo real: ventas hechas desde OTRO dispositivo (celular) refrescan el panel
   useEffect(() => {
@@ -646,7 +651,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
           const t = Date.now();
           if (t - lastGoalFetchRef.current < 3000) return;
           lastGoalFetchRef.current = t;
-          fetchRef.current(true);
+          void fetchRef.current?.(true);
         })
         .subscribe();
     } catch { /* realtime no disponible: siguen el intervalo de 30s y visibility */ }
@@ -889,63 +894,6 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
 
   return (
     <div id="dashboard-print-area" className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      {localToast && !showToast && (
-        <div className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white border border-slate-200 text-slate-800 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold dark:bg-obsidian-800 dark:border-obsidian-600 dark:text-white animate-row">
-          {localToast}
-        </div>
-      )}
-      {sellerOnly && profile && (
-        <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
-          <ShoppingBag size={18} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-            <b>Mostrando solo tus ventas.</b> Tu cuenta de vendedor ve únicamente las ventas que registraste.
-            Las ventas hechas por el administrador u otros vendedores no aparecen en tu resumen.
-          </p>
-        </div>
-      )}
-      {!loading && salesList.length === 0 && (
-        <div className="bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-xl p-4 flex items-start gap-3">
-          <Calendar size={20} className="text-sky-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-sky-900 dark:text-sky-300">Sin ventas en el período seleccionado</p>
-            <p className="text-xs text-sky-700 dark:text-sky-400 mt-0.5">
-              {dateRange === 'custom'
-                ? `Rango elegido: ${customRange.start || '—'} → ${customRange.end || 'hoy'} — no hay ventas registradas en esas fechas.`
-                : 'No hay ventas registradas en este período.'}{' '}
-              {sellerOnly
-                ? 'Si esperabas ver ventas de otros vendedores: con tu cuenta solo se muestran las tuyas.'
-                : 'Probá con Hoy, Semana o Mes, o elegí otro rango de fechas.'}
-            </p>
-          </div>
-        </div>
-      )}
-      {!alertDismissed && lowStockProducts.length > 0 && (
-        <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent-orange" />
-          <div className="flex items-center gap-3">
-            <div className="bg-accent-orange/20 p-2 rounded-lg shrink-0">
-              <AlertTriangle size={20} className="text-accent-orange" />
-            </div>
-            <div>
-              <h4 className="text-accent-orange font-bold text-sm">Alerta de Stock Crítico</h4>
-              <p className="text-zinc-400 text-xs mt-0.5">
-                {lowStockProducts.length} productos requieren reposición ({lowStockProducts.slice(0, 2).map((p) => `"${p.name}"`).join(', ')}{lowStockProducts.length > 2 ? '…' : ''}).
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => setActiveTab('products')}
-              className="bg-accent-orange hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-            >
-              Ver Stock
-            </button>
-            <button onClick={() => setAlertDismissed(true)} className="text-zinc-400 hover:text-white p-1.5 rounded-lg cursor-pointer" title="Cerrar">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
       <div data-tour="dashboard-hero" className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -1063,19 +1011,73 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
                 </>
               )}
             </div>
-          <button
-            onClick={() => setActiveTab('pos')}
-            className="bg-[#10b981] hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-card transition-all flex items-center gap-2 card-hover cursor-pointer print:hidden"
-            title="Ir a Caja"
-          >
-            <ShoppingCartPh size={18} weight="bold" />
-<span>Caja</span>
-           </button>
          </div>
        </div>
 
-      {/* Acciones Rápidas — glass grid (Campify Dark x Premium SaaS) */}
-      <div data-tour="dashboard-quick" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 print-hide">
+      {/* Avisos contextuales: van después del título para no competir con él. */}
+      <div className="space-y-3">
+        {localToast && !showToast && (
+          <div className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-white border border-slate-200 text-slate-800 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold dark:bg-obsidian-800 dark:border-obsidian-600 dark:text-white animate-row">
+            {localToast}
+          </div>
+        )}
+        {sellerOnly && profile && (
+          <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 flex items-start gap-3">
+            <ShoppingBag size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              <b>Mostrando solo tus ventas.</b> Tu cuenta de vendedor ve únicamente las ventas que registraste.
+              Las ventas hechas por el administrador u otros vendedores no aparecen en tu resumen.
+            </p>
+          </div>
+        )}
+        {!loading && salesList.length === 0 && (
+          <div className="bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-xl p-4 flex items-start gap-3">
+            <Calendar size={20} className="text-sky-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-sky-900 dark:text-sky-300">Sin ventas en el período seleccionado</p>
+              <p className="text-xs text-sky-700 dark:text-sky-400 mt-0.5">
+                {dateRange === 'custom'
+                  ? `Rango elegido: ${customRange.start || '—'} → ${customRange.end || 'hoy'} — no hay ventas registradas en esas fechas.`
+                  : 'No hay ventas registradas en este período.'}{' '}
+                {sellerOnly
+                  ? 'Si esperabas ver ventas de otros vendedores: con tu cuenta solo se muestran las tuyas.'
+                  : 'Probá con Hoy, Semana o Mes, o elegí otro rango de fechas.'}
+              </p>
+            </div>
+          </div>
+        )}
+        {!alertDismissed && lowStockProducts.length > 0 && (
+          <div className="bg-accent-orange/10 border border-accent-orange/30 rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent-orange" />
+            <div className="flex items-center gap-3">
+              <div className="bg-accent-orange/20 p-2 rounded-lg shrink-0">
+                <AlertTriangle size={20} className="text-accent-orange" />
+              </div>
+              <div>
+                <h4 className="text-accent-orange font-bold text-sm">Alerta de Stock Crítico</h4>
+                <p className="text-zinc-400 text-xs mt-0.5">
+                  {lowStockProducts.length} productos requieren reposición ({lowStockProducts.slice(0, 2).map((p) => `"${p.name}"`).join(', ')}{lowStockProducts.length > 2 ? '…' : ''}).
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => setActiveTab('products')}
+                className="bg-accent-orange hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                Ver Stock
+              </button>
+              <button onClick={() => setAlertDismissed(true)} className="text-zinc-400 hover:text-white p-1.5 rounded-lg cursor-pointer" title="Cerrar">
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Barra de herramientas: acciones + búsqueda agrupadas, separadas de los datos. */}
+      <section className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-3 sm:p-4 space-y-3 dark:border-white/5 dark:bg-white/[0.02] print-hide">
+      <div data-tour="dashboard-quick" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <button
           onClick={() => setActiveTab('pos')}
           className="glass-button h-24 rounded-xl flex flex-col items-center justify-center gap-2 group cursor-pointer"
@@ -1186,6 +1188,8 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
           );
         })()}
       </div>
+
+      </section>
 
       {/* Meta de Ventas Diaria */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
@@ -1313,7 +1317,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         {/* Ventas - claro/oscuro global */}
         <div
           onClick={() => setActiveModal('sales')}
-          className="rounded-2xl p-5 border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
+          className="rounded-2xl p-5 min-h-[205px] border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
         >
           <div className="absolute -right-10 -top-10 w-32 h-32 bg-brand-500/10 blur-3xl rounded-full pointer-events-none animate-blob" />
           <div className="flex justify-between items-start mb-4 relative z-10">
@@ -1347,7 +1351,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         {/* Recaudación */}
         <div
           onClick={() => setActiveModal('revenue')}
-          className="rounded-2xl p-5 border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
+          className="rounded-2xl p-5 min-h-[205px] border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
         >
           <div className="absolute -right-10 -top-10 w-32 h-32 bg-accent-emerald/10 blur-3xl rounded-full pointer-events-none animate-blob" style={{ animationDelay: '1s' }} />
           <div className="flex justify-between items-start mb-4 relative z-10">
@@ -1374,7 +1378,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         {/* Ganancia */}
         <div
           onClick={() => setActiveModal('profit')}
-          className="rounded-2xl p-5 border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
+          className="rounded-2xl p-5 min-h-[205px] border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-[#e2e8f0] hover:border-emerald-500 dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
         >
           <div className="absolute -right-10 -top-10 w-32 h-32 bg-teal-500/10 blur-3xl rounded-full pointer-events-none animate-blob" style={{ animationDelay: '2s' }} />
           <div className="flex justify-between items-start mb-4 relative z-10">
@@ -1398,27 +1402,26 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
           </div>
         </div>
 
-        {/* Stock crítico */}
+        {/* Stock crítico — misma jerarquía visual que las otras 3 KPI. */}
         <div
           data-tour="dashboard-stock"
           onClick={() => setActiveModal('stock')}
-          className="rounded-2xl p-5 border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer relative overflow-hidden bg-white shadow-card border-red-500/30 bg-gradient-to-br from-white to-red-50/60 hover:border-red-400 dark:bg-none dark:bg-obsidian-800/60 dark:border-accent-orange/20 dark:backdrop-blur-xl group"
+          className="rounded-2xl p-5 min-h-[205px] border flex flex-col justify-between card-hover transition-colors duration-200 cursor-pointer group relative overflow-hidden bg-white shadow-card border-red-500/30 hover:border-red-400 dark:bg-obsidian-800/60 dark:border-accent-orange/20 dark:backdrop-blur-xl dark:hover:border-brand-500/50"
         >
-          <div className="absolute -right-10 -top-10 w-32 h-32 bg-accent-orange/10 blur-3xl rounded-full pointer-events-none animate-blob" style={{ animationDelay: '3s' }} />
-          <div className="absolute inset-0 bg-gradient-to-br from-[#FF6B00]/5 to-transparent pointer-events-none hidden dark:block" />
           <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="flex items-center gap-2">
-              <Warning size={18} weight="fill" className="text-red-500 dark:text-[#FF6B00]" />
-              <h3 className="text-xs font-bold tracking-widest uppercase text-red-500 dark:text-white dark:text-sm dark:font-medium dark:tracking-normal dark:uppercase-none">Stock Crítico</h3>
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl bg-red-500/10 dark:bg-accent-orange/10 flex items-center justify-center shrink-0 transition-colors group-hover:bg-red-500/20 dark:group-hover:bg-accent-orange/20 ${stats.lowStockCount > 0 ? 'pulse-alert' : ''}`}>
+                <Warning size={18} weight="fill" className="text-red-500 dark:text-[#FF6B00]" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Stock Crítico</h3>
             </div>
-            <span className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm bg-red-500 dark:bg-[#FF6B00] dark:shadow-[0_0_15px_rgba(255,107,0,0.3)] ${stats.lowStockCount > 0 ? 'pulse-alert' : ''}`}>
-              <Warning size={20} weight="bold" className="text-white" />
-            </span>
           </div>
           <div className="mb-1 flex items-end gap-2 relative z-10">
-            <span className="text-3xl sm:text-4xl font-extrabold tnum text-red-500 dark:text-[#FF6B00] dark:text-2xl sm:dark:text-3xl dark:font-bold">{stats.lowStockCount} <span className="text-sm font-medium text-red-500/80 dark:text-[#9E9E9E] dark:font-normal">ítems</span></span>
+            <span className="text-2xl sm:text-3xl font-bold block tnum text-red-500 dark:text-[#FF6B00]">
+              {stats.lowStockCount} <span className="text-sm font-medium text-red-500/80 dark:text-[#9E9E9E]">ítems</span>
+            </span>
           </div>
-          <div className="pt-4 border-t border-red-500/10">
+          <div className="space-y-2 text-sm pt-3 mt-3 border-t border-slate-100 dark:border-[#333333]">
             <span className={`text-xs font-bold ${stats.lowStockCount > 0 ? 'text-red-600 dark:text-[#FF6B00]' : 'text-emerald-600 dark:text-[#00C853]'}`}>
               {stats.lowStockCount > 0 ? 'Requiere Reposición' : 'Stock Normal'}
             </span>
@@ -1433,7 +1436,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         const visitedReports = hasVisitedSection('reports');
         const steps = [
           { done: stats.totalProducts > 0, tab: 'products', title: 'Cargar tu primer producto', sub: stats.totalProducts > 0 ? `${stats.totalProducts} productos cargados` : 'Agregá tu catálogo y stock', action: () => setActiveTab('products'), actionLabel: 'Ir a Productos' },
-          { done: stats.salesCount > 0, tab: 'pos', title: 'Registrar tu primera venta', sub: stats.salesCount > 0 ? `${stats.salesCount} ventas realizadas` : 'Operá desde la caja', action: () => setActiveTab('pos'), actionLabel: 'Ir al POS' },
+          { done: stats.salesCount > 0, tab: 'pos', title: 'Registrar tu primera venta', sub: stats.salesCount > 0 ? `${stats.salesCount} ventas realizadas` : 'Operá desde Ventas', action: () => setActiveTab('pos'), actionLabel: 'Ir a Ventas' },
           { done: dailyGoal > 0, tab: null, title: 'Definir la meta de ventas diaria', sub: dailyGoal > 0 ? `Meta: $${dailyGoal.toLocaleString('es-AR')}` : 'Fijá un objetivo para tu equipo', action: () => { setEditingGoal(true); setGoalInput(''); }, actionLabel: 'Definir meta' },
           { done: visitedHistory, tab: 'history', title: 'Revisar pedidos e historial', sub: visitedHistory ? 'Historial revisado ✓' : 'Controlá trazabilidad y reportes', action: () => setActiveTab('history'), actionLabel: 'Ir ahora' },
           { done: visitedCashClose, tab: 'cashclose', title: 'Hacer tu primer cierre de caja', sub: visitedCashClose ? 'Cierre revisado ✓' : 'Compará lo esperado con el cajón', action: () => setActiveTab('cashclose'), actionLabel: 'Cerrar caja' },
@@ -1515,8 +1518,9 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         );
       })()}
 
-      {/* Gráfico de Tendencia de Ventas */}
-      <div data-tour="dashboard-charts" className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
+      {/* Análisis de ventas: tendencia (más espacio) + medios de pago. */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div data-tour="dashboard-charts" className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333] lg:col-span-2">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
           <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <TrendingUp className="text-sky-600" size={18} />
@@ -1544,6 +1548,10 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         />
       </div>
 
+      </section>
+
+      {/* Clientes y vencimientos: dos bloques del mismo peso, uno al lado del otro. */}
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
       {/* Top Clientes */}
       {topCustomers.length > 0 && (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 dark:bg-[#1F1F1F] dark:border-[#333333]">
@@ -1610,7 +1618,7 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#333333] text-sm text-slate-700 dark:text-slate-300">
                 {expiringProducts.map((p) => {
-                  const diff = Math.ceil((new Date(p.expiry_date! + (p.expiry_date!.includes('T') ? '' : 'T00:00:00')).getTime() - Date.now()) / 86400000);
+                  const diff = Math.ceil((new Date(p.expiry_date! + (p.expiry_date!.includes('T') ? '' : 'T00:00:00')).getTime() - expiringNow) / 86400000);
                   return (
                     <tr key={p.id} className="hover:bg-amber-50/40 dark:hover:bg-white/5 transition">
                       <td className="p-3 whitespace-nowrap">
@@ -1631,14 +1639,16 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         </div>
       )}
 
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div
           data-tour="dashboard-topsellers"
           onClick={() => setActiveModal('bestSellers')}
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
+          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer dark:bg-[#1F1F1F] dark:border-[#333333] dark:hover:border-brand-500/50"
         >
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center justify-between border-b pb-3 dark:border-white/5">
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Award className="text-amber-500" size={20} />
               <span>Top 10 Productos Estrella</span>
             </h3>
@@ -1663,10 +1673,10 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         <div
           data-tour="dashboard-categories"
           onClick={() => setActiveModal('categories')}
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
+          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer dark:bg-[#1F1F1F] dark:border-[#333333] dark:hover:border-brand-500/50"
         >
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center justify-between border-b pb-3 dark:border-white/5">
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="text-teal-600" size={20} />
               <span>Rentabilidad por Categoría</span>
             </h3>
@@ -1691,10 +1701,10 @@ export function DashboardView({ setActiveTab, profile, showToast }: DashboardVie
         <div
           data-tour="dashboard-hourly"
           onClick={() => setActiveModal('hourly')}
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer"
+          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 hover:border-emerald-500 transition duration-200 cursor-pointer dark:bg-[#1F1F1F] dark:border-[#333333] dark:hover:border-brand-500/50"
         >
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center justify-between border-b pb-3 dark:border-white/5">
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Calendar className="text-blue-600" size={20} />
               <span>Horarios Pico (Franja Horaria)</span>
             </h3>

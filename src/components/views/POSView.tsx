@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Product, CartItem, Profile } from '../../types';
-import { Search, ShoppingCart, Trash2, Plus, Minus, Check, Camera, Scale, Pause, X, Clock, AlertTriangle, Receipt, Printer, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, Check, Camera, Scale, Pause, X, Clock, AlertTriangle, Receipt, Printer, ArrowRight, Loader2, CreditCard } from 'lucide-react';
 import { CheckCircle, WhatsappLogo, Printer as PrinterPh, Copy as CopyPh, X as XPh, FilePdf as FilePdfPh, Desktop as DesktopPh, SignIn as SignInPh } from '@phosphor-icons/react';
 import { RoundedSelect } from '../ui/RoundedSelect';
 import { IVA_COND_LABELS, netoFromTotal, ivaFromTotal, round2 } from '../../lib/tax';
@@ -442,7 +442,8 @@ export function POSView({ profile, showToast }: POSViewProps) {
   useEffect(() => {
     scannerApi.setOnDetected(async (code: string) => resolveBarcodeCode(code));
     return () => { scannerApi.setOnDetected(null); };
-  }, [products, resolveBarcodeCode]);
+    // scannerApi es estable (useMemo en el provider): incluirlo evita closures viejos.
+  }, [products, resolveBarcodeCode, scannerApi]);
 
   // F8: lector físico (USB/BT) sin modal — suma directo al carrito.
   // El provider captura código+ENTER global; si el modal está cerrado y
@@ -1211,19 +1212,12 @@ export function POSView({ profile, showToast }: POSViewProps) {
 
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 pb-24 lg:pb-6">
-      {localToast && !showToast && (
-        <div className="lg:col-span-12 -mb-1">
-          <div className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg animate-in fade-in-0 slide-in-from-top-2 duration-200">
-            {localToast}
-          </div>
-        </div>
-      )}
       {/* Products Column */}
       <div className="lg:col-span-7 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-              Caja / Ventas (POS)
+              Ventas
               <ContextualTooltip tipKey="pos-shortcuts" title="Atajos y escáner">
                 Escaneá con la cámara o un lector USB. <strong>F8</strong> lector físico, <strong>F9</strong> balanza, <strong>F12</strong> cobrar. Tocá el ícono para volver a ver esta ayuda.
               </ContextualTooltip>
@@ -1240,7 +1234,7 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 <span>En Espera ({parkedSales.length})</span>
               </button>
             )}
-            <div className="flex bg-slate-200/80 p-1 rounded-xl text-xs font-bold" role="group" aria-label="Tipo de precio">
+            <div className="flex bg-slate-200/80 p-1 rounded-xl text-xs font-bold dark:bg-white/5" role="group" aria-label="Tipo de precio">
               <button
                 onClick={() => handlePriceTypeChange('wholesale')}
                 aria-pressed={priceType === 'wholesale'}
@@ -1258,6 +1252,13 @@ export function POSView({ profile, showToast }: POSViewProps) {
             </div>
           </div>
         </div>
+
+        {/* Avisos del POS: después del encabezado, antes de los controles. */}
+        {localToast && !showToast && (
+          <div className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg animate-in fade-in-0 slide-in-from-top-2 duration-200 dark:bg-obsidian-800 dark:border dark:border-obsidian-600">
+            {localToast}
+          </div>
+        )}
 
         {/* Search, Camera Scanner & Category Dropdown */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
@@ -1320,6 +1321,12 @@ export function POSView({ profile, showToast }: POSViewProps) {
                 ))}
                 </div>
               </div>
+            )}
+            {/* Estado del cobro: agrupado para no interrumpir la grilla de productos. */}
+            {(paymentMethod === 'mercadopago_point' || paymentMethod === 'mercadopago') && (
+              <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <CreditCard size={13} /> Estado del cobro
+              </p>
             )}
             {paymentMethod === 'mercadopago_point' && (
               <div className="p-3 bg-violet-50/70 dark:bg-violet-500/10 rounded-2xl border border-violet-200 dark:border-violet-500/30 space-y-2">
@@ -1480,8 +1487,8 @@ export function POSView({ profile, showToast }: POSViewProps) {
       {/* Cart & Checkout Column */}
       <div data-tour="pos-cart" className="lg:col-span-5 bg-white p-4 sm:p-6 rounded-3xl shadow-xl border-2 border-slate-200/80 flex flex-col justify-between dark:bg-obsidian-800/60 dark:border-obsidian-600/60 dark:backdrop-blur-xl">
         <div className="space-y-4">
-          <div className="flex justify-between items-center border-b pb-3">
-            <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 dark:border-white/5">
+            <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2 dark:text-white">
               <ShoppingCart size={22} className="text-emerald-600" />
               <span>Carrito de Venta</span>
             </h2>
@@ -1502,13 +1509,14 @@ export function POSView({ profile, showToast }: POSViewProps) {
                   <Pause size={16} />
                 </button>
               )}
-              <span className="text-xs bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-bold tnum">
+              <span className="text-xs bg-slate-100 text-slate-800 px-3 py-1 rounded-full font-bold tnum dark:bg-white/10 dark:text-white">
                 {cart.length} líneas · {cart.reduce((a, i) => a + Number(i.quantity), 0).toLocaleString('es-AR')} un
               </span>
             </div>
           </div>
 
-          {/* Customer & Sale Options */}
+          {/* Datos de la venta */}
+          <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Datos de la venta</p>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="relative">
@@ -1758,8 +1766,9 @@ export function POSView({ profile, showToast }: POSViewProps) {
             </div>
           </div>
 
-          {/* Cart Items List */}
-          <div className="max-h-48 sm:max-h-[540px] overflow-y-auto space-y-2.5 pr-1 divide-y divide-slate-100">
+          {/* Productos del carrito */}
+          <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Productos del carrito</p>
+          <div className="max-h-48 sm:max-h-[540px] overflow-y-auto space-y-2.5 pr-1 divide-y divide-slate-100 dark:divide-white/5">
             {cart.length === 0 ? (
               <p className="text-center text-slate-400 py-8 text-sm font-medium">El carrito está vacío. Agregá productos.</p>
             ) : (

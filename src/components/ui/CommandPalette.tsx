@@ -71,7 +71,7 @@ export function CommandPalette({ open, onClose, onNavigate, onToggleTheme, dark,
   }, [open ]);
 
   const actions: ActionItem[] = useMemo(() => [
-    { kind: 'action', id: 'pos', label: 'Venta Rápida', hint: 'Caja / POS', keywords: 'caja pos vender cobrar venta rapida', icon: <ShoppingCart size={17} weight="fill" />, run: () => onNavigate('pos') },
+    { kind: 'action', id: 'pos', label: 'Venta Rápida', hint: 'Ventas', keywords: 'caja pos vender cobrar venta rapida ventas', icon: <ShoppingCart size={17} weight="fill" />, run: () => onNavigate('pos') },
     { kind: 'action', id: 'products', label: 'Productos', hint: 'Stock', keywords: 'productos stock inventario mercaderia', icon: <Package size={17} weight="fill" />, run: () => onNavigate('products') },
     { kind: 'action', id: 'dashboard', label: 'Panel Principal', hint: 'Resumen', keywords: 'panel dashboard inicio resumen operativo', icon: <SquaresFour size={17} weight="fill" />, run: () => onNavigate('dashboard') },
     { kind: 'action', id: 'history', label: 'Historial', hint: 'Pedidos', keywords: 'historial pedidos tickets ventas', icon: <ClockCounterClockwise size={17} weight="fill" />, run: () => onNavigate('history') },

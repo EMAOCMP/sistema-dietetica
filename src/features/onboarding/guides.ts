@@ -21,7 +21,7 @@ export interface GuideSection {
 /** Metadatos de las secciones que se muestran en el Centro de guías. */
 export const GUIDE_SECTIONS: GuideSection[] = [
   { id: 'dashboard', title: 'Panel principal', desc: 'KPIs, rango de fechas, acciones rápidas, checklist, tendencias, pagos, top productos, rentabilidad, horarios y stock crítico.', level: 'esencial', minutes: 2 },
-  { id: 'pos', title: 'Caja / POS', desc: 'Buscar, escanear, pesar, carrito, descuentos y cobrar.', level: 'esencial', minutes: 2 },
+  { id: 'pos', title: 'Ventas', desc: 'Buscar, escanear, pesar, carrito, descuentos y cobrar.', level: 'esencial', minutes: 2 },
   { id: 'products', title: 'Productos y stock', desc: 'Alta, precios, márgenes, filtros, importación y exportación.', level: 'esencial', minutes: 2 },
   { id: 'intake', title: 'Ingreso de stock', desc: 'Compras a proveedores: borrador, escaneo y confirmación.', level: 'basico', minutes: 1 },
   { id: 'purchaseorders', title: 'Órdenes de compra', desc: 'Reposición sugerida por stock y ventas; borrador, envío y recepción.', level: 'basico', minutes: 2 },

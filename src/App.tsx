@@ -10,7 +10,7 @@ import { NotificationsPanel } from './components/ui/NotificationsPanel';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { MobileTabBar } from './components/layout/MobileTabBar';
 import { List, MagnifyingGlass, Sun, Moon, SignOut, SidebarSimple, Sidebar, Question } from '@phosphor-icons/react';
-import { Plus, Check } from 'lucide-react';
+import { ShoppingCart, Check } from 'lucide-react';
 import { startSyncEngine, stopSyncEngine } from './lib/syncEngine';
 import { clearOfflineData } from './lib/offlineDB';
 import { canAccessTab } from './lib/permissions';
@@ -441,14 +441,15 @@ export function App() {
         </main>
       </div>
 
-      {/* Floating Action Button — oculto en Productos para no tapar la columna Acciones */}
-      {activeTab !== 'products' && (
+      {/* Floating Action Button — acceso directo a Venta Rápida */}
+      {canAccessTab(profile?.role ?? 'vendedor', 'pos') && activeTab !== 'pos' && (
         <button
-          onClick={() => { goTo('products'); showToast('Nuevo Producto / Stock'); }}
+          onClick={() => goTo('pos')}
+          aria-label="Nueva Venta Rápida"
+          title="Nueva Venta Rápida"
           className="fixed bottom-24 lg:bottom-6 right-4 lg:right-6 w-14 h-14 bg-brand-600 hover:bg-brand-500 text-white rounded-full shadow-glow-brand flex items-center justify-center transition-transform hover:scale-110 active:scale-95 z-40 cursor-pointer"
-          title="Nueva acción (+)"
         >
-          <Plus size={22} />
+          <ShoppingCart size={22} />
         </button>
       )}
 

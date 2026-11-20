@@ -74,7 +74,7 @@ export function Navbar({
     // El contador de la cola offline NO va en "Panel Principal": el badge de
     // sincronización lo muestra el OfflineIndicator (abajo a la derecha).
     { id: 'dashboard', label: 'Panel Principal', icon: SquaresFour },
-    { id: 'pos', label: 'Venta Rápida (POS)', icon: ShoppingCart },
+    { id: 'pos', label: 'Venta Rápida', icon: ShoppingCart },
     { id: 'products', label: 'Productos / Stock', icon: Package, badge: lowStockCount > 0 ? lowStockCount : undefined, badgeColor: 'red' as const },
     { id: 'intake', label: 'Ingreso Mercadería', icon: Truck },
     { id: 'purchaseorders', label: 'Ordenes de Compra', icon: Truck },

@@ -44,7 +44,7 @@ const ROLE_META: Record<UserRole, { label: string; icon: typeof Crown; chip: str
 const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
   { value: 'admin', label: 'Administrador (Total)', desc: 'Acceso completo' },
   { value: 'supervisor', label: 'Supervisor (Control)', desc: 'Gestión sin roles' },
-  { value: 'vendedor', label: 'Vendedor (Caja/POS)', desc: 'Ventas, productos e ingresos' },
+  { value: 'vendedor', label: 'Vendedor (Ventas)', desc: 'Ventas, productos e ingresos' },
 ];
 
 export function UsersView({ currentUser }: UsersViewProps) {

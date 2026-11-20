@@ -46,8 +46,8 @@ export const SYSTEM_CAPABILITIES: Capability[] = [
   {
     id: 'pos',
     label: 'Vender y cobrar',
-    short: 'POS',
-    desc: 'Registrar ventas en Caja / POS, aplicar descuentos y cobrar en cualquier medio.',
+    short: 'Ventas',
+    desc: 'Registrar ventas desde el módulo de Ventas, aplicar descuentos y cobrar en cualquier medio.',
     group: 'Operación',
     allowed: (role) => canAccessTab(role, 'pos'),
   },

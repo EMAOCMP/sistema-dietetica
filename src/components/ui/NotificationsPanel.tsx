@@ -159,7 +159,8 @@ export function NotificationsPanel({ onNavigate }: NotificationsPanelProps) {
         aria-label="Notificaciones"
         aria-expanded={open}
       >
-        <Bell size={19} weight="fill" />
+        {/* Mismo latido que el ícono de Stock Crítico cuando hay alertas pendientes. */}
+        <Bell size={19} weight="fill" className={notifications.length > 0 ? 'pulse-alert' : ''} />
         {notifications.length > 0 && (
           <span className="absolute top-0.5 right-0.5 bg-accent-orange text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border-2 border-[#f4f7f6] dark:border-obsidian-950">
             {notifications.length}

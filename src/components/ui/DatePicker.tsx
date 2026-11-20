@@ -126,12 +126,12 @@ export function DatePicker({ startDate, endDate, onChange, onClose, maxDate }: D
     }
   };
 
+  // Se sacan "Hoy" y "Este mes": el panel ya tiene botones propios para eso
+  // y en el desplegable de Personalizado solo interesa lo específico del rango.
   const presets = [
-    { label: 'Hoy', start: today, end: today },
     { label: 'Ayer', start: new Date(today.getTime() - 86400000), end: new Date(today.getTime() - 86400000) },
     { label: 'Últimos 7 días', start: new Date(today.getTime() - 6 * 86400000), end: today },
     { label: 'Últimos 30 días', start: new Date(today.getTime() - 29 * 86400000), end: today },
-    { label: 'Este mes', start: new Date(today.getFullYear(), today.getMonth(), 1), end: today },
     { label: 'Mes pasado', start: new Date(today.getFullYear(), today.getMonth() - 1, 1), end: new Date(today.getFullYear(), today.getMonth(), 0) },
     { label: 'Este año', start: new Date(today.getFullYear(), 0, 1), end: today },
   ];
