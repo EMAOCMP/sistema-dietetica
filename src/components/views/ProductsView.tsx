@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Product, Supplier, Profile } from '../../types';
 import { Plus, Search, Edit2, Trash2, Barcode, X, Camera, History, Copy, Download, Percent, PackagePlus, PackageMinus, Tag, Upload, Truck, Clock, ImagePlus, ClipboardCheck, ListOrdered, RotateCcw, QrCode, MessageCircle, Bookmark, BarChart3, AlertTriangle } from 'lucide-react';
@@ -18,6 +18,10 @@ const daysToExpiry = (p: Product): number | null => {
   const diff = new Date(p.expiry_date + 'T00:00:00').getTime() - new Date(new Date().toDateString()).getTime();
   return Math.round(diff / 86400000);
 };
+
+/** Nombre único para el bucket de fotos (fuera del componente: datos puros). */
+const imagePathFor = (ext: string) =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
 const ADJUST_REASONS = [
   { value: 'compra', label: 'Compra a proveedor' },
@@ -76,7 +80,14 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   const canManage = canDeactivateProducts(profile?.role);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  // Búsqueda entrante desde el dashboard: se lee al inicializar, no en un efecto.
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try {
+      const q = localStorage.getItem('dv-product-search') || '';
+      if (q) localStorage.removeItem('dv-product-search');
+      return q;
+    } catch { return ''; }
+  });
   const [localToast, setLocalToast] = useState<string | null>(null);
   const notifyTimer = useRef<number | null>(null);
   const [confirmState, setConfirmState] = useState<{ message: string } | null>(null);
@@ -134,7 +145,8 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   useEffect(() => {
     scannerApi.setOnDetected(resolveBarcodeCode);
     return () => { scannerApi.setOnDetected(null); };
-  }, [resolveBarcodeCode]);
+    // scannerApi es estable (useMemo en el provider): incluirlo evita closures viejos.
+  }, [resolveBarcodeCode, scannerApi]);
 
   const applyScannedCode = (code: string) => {
     const dupe = products.find((p) => p.barcode === code && p.id !== editingProduct?.id);
@@ -158,7 +170,6 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
   const [autoCalcField, setAutoCalcField] = useState<'wholesale' | 'retail'>('wholesale');
 
   // Duplicados detection
-  const [nameDuplicates, setNameDuplicates] = useState<Product[]>([]);
 
   // Barcode preview canvas
   const barcodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -282,41 +293,12 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     return ((w - Number(p.cost_price)) / w) * 100;
   };
 
-  useEffect(() => {
-    fetchProducts();
-    fetchSuppliers();
-    fetchRotation();
-    // Búsqueda entrante desde el dashboard (buscador rápido)
-    try {
-      const q = localStorage.getItem('dv-product-search');
-      if (q) {
-        setSearchTerm(q);
-        localStorage.removeItem('dv-product-search');
-      }
-    } catch { /* noop */ }
-  }, []);
-
   // Autofocus al abrir modal
   useEffect(() => {
     if (modalOpen && modalTab === 'datos') {
       setTimeout(() => nameInputRef.current?.focus(), 100);
     }
   }, [modalOpen, modalTab]);
-
-  // Detección de duplicados por nombre
-  useEffect(() => {
-    if (!modalOpen || !name.trim() || name.length < 3) {
-      setNameDuplicates([]);
-      return;
-    }
-    const q = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const matches = activeProducts.filter((p) => {
-      if (editingProduct && p.id === editingProduct.id) return false;
-      const pname = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return pname.includes(q) || q.includes(pname);
-    }).slice(0, 3);
-    setNameDuplicates(matches);
-  }, [name, modalOpen]);
 
   // Renderizar preview de código de barras
   useEffect(() => {
@@ -414,8 +396,8 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     }
   };
 
-  const fetchProducts = async () => {
-    setLoading(true);
+  const fetchProducts = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('products')
@@ -430,6 +412,19 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       setLoading(false);
     }
   };
+
+  // Carga inicial: detrás de las declaraciones para no leerlas antes de inicializar.
+  // El ref mantiene la carga como sincronización con Supabase, no como setState en render.
+  const bootRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    bootRef.current = () => {
+      // `loading` arranca en true: no hace falta volver a setearlo en el mount.
+      void fetchProducts(false);
+      void fetchSuppliers();
+      void fetchRotation();
+    };
+  });
+  useEffect(() => { bootRef.current?.(); }, []);
 
   const handleOpenModal = (product?: Product) => {
     if (product) {
@@ -462,7 +457,6 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       setImageUrl('');
     }
     setAutoMargin('');
-    setNameDuplicates([]);
     setModalTab('datos');
     setModalOpen(true);
   };
@@ -494,7 +488,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     setUploadingPhoto(true);
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = imagePathFor(ext);
       const { error: upError } = await supabase.storage.from('product-images').upload(path, file);
       if (upError) throw upError;
       const { data } = supabase.storage.from('product-images').getPublicUrl(path);
@@ -739,6 +733,17 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
 
   const activeProducts = products.filter((p) => p.is_active);
   const inactiveProducts = products.filter((p) => !p.is_active);
+
+  // Duplicados por nombre: derivados del estado (sin efecto ni setState extra).
+  const nameDuplicates = useMemo(() => {
+    if (!modalOpen || !name.trim() || name.length < 3) return [];
+    const q = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return activeProducts.filter((p) => {
+      if (editingProduct && p.id === editingProduct.id) return false;
+      const pname = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return pname.includes(q) || q.includes(pname);
+    }).slice(0, 3);
+  }, [name, modalOpen, activeProducts, editingProduct]);
   const filteredProducts = products
     .filter((p) => (showInactive ? !p.is_active : p.is_active))
     .filter((p) => {
@@ -1119,7 +1124,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
     }
     win.document.write(`
       <html><head><title>Etiquetas</title>
-      <script src="https://cdn.jsdelivr.net/npm/bwip-js@4.3.0/dist/bwip-js-min.js"><\/script>
+      <script src="https://cdn.jsdelivr.net/npm/bwip-js@4.3.0/dist/bwip-js-min.js"></script>
       <style>
         @page { size: auto; margin: 5mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1140,7 +1145,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           } catch (e) { /* sin internet: queda el número */ }
           setTimeout(function(){ window.focus(); window.print(); }, 400);
         };
-      <\/script>
+      </script>
       </body></html>`);
     win.document.close();
   };
@@ -1455,96 +1460,108 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           </div>
         </div>
       )}
-      <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-        <div className="shrink-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-1.5">
-            Gestión de Productos y Stock
-            <ContextualTooltip tipKey="products-scan" title="Escaneá para dar de alta">
-              Usá el botón <strong>Escanear</strong> para leer el código de barras con la cámara o un lector USB y precargar el producto. Si el código no existe, te ofrece crearlo al instante.
-            </ContextualTooltip>
-          </h1>
-          <p className="text-sm text-slate-500 font-medium">Alta, modificación, precios mayoristas/minoristas y stock</p>
-          <div className="flex flex-wrap gap-2 mt-1.5 text-xs font-bold">
-            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 tnum">Valorizado costo: ${valuation.cost.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 tnum">Potencial venta: ${valuation.sale.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-            {expiringSoon > 0 && (
-              <button onClick={() => setExpiryFilter(true)} className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 transition cursor-pointer">
-                ⏳ {expiringSoon} por vencer (30 días)
-              </button>
-            )}
-            {criticalProducts.length > 0 && (
-              <button
-                onClick={() => sendWhatsAppAlert(criticalProducts)}
-                className="px-3 py-1 rounded-full bg-green-100 text-green-800 hover:bg-green-200 transition cursor-pointer flex items-center gap-1"
-              >
-                <MessageCircle size={12} /> WhatsApp ({criticalProducts.length})
-              </button>
-            )}
-          </div>
+      <header>
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
+          Gestión de Productos y Stock
+          <ContextualTooltip tipKey="products-scan" title="Escaneá para dar de alta">
+            Usá el botón <strong>Escanear</strong> para leer el código de barras con la cámara o un lector USB y precargar el producto. Si el código no existe, te ofrece crearlo al instante.
+          </ContextualTooltip>
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Alta, modificación, precios mayoristas/minoristas y stock</p>
+      </header>
+
+      {/* Resumen arriba: es información, no compite con las acciones. */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-sm dark:border-[#333333] dark:bg-[#1F1F1F]">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Resumen del catálogo</p>
+        <div className="flex flex-wrap gap-2 text-xs font-bold">
+          <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 tnum dark:bg-white/5 dark:text-slate-300">Valorizado costo: ${valuation.cost.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 tnum dark:bg-emerald-500/10 dark:text-emerald-400">Potencial venta: ${valuation.sale.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          {expiringSoon > 0 && (
+            <button onClick={() => setExpiryFilter(true)} className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200 transition cursor-pointer dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20">
+              ⏳ {expiringSoon} por vencer (30 días)
+            </button>
+          )}
+          {criticalProducts.length > 0 && (
+            <button
+              onClick={() => sendWhatsAppAlert(criticalProducts)}
+              className="px-3 py-1 rounded-full bg-green-100 text-green-800 hover:bg-green-200 transition cursor-pointer flex items-center gap-1 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+            >
+              <MessageCircle size={12} /> WhatsApp ({criticalProducts.length})
+            </button>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 xl:justify-end xl:ml-auto">
+      </section>
+
+      {/* Búsqueda + acción principal: lo más usado, en un solo renglón. */}
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div data-tour="products-toolbar" className="flex flex-1 items-center space-x-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-[#333333] dark:bg-[#1F1F1F]">
+          <Search className="text-slate-400 shrink-0" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, código de barras o categoría..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full focus:outline-none text-slate-900 dark:text-white text-sm font-medium bg-transparent"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} className="text-xs font-bold text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer">✕</button>
+          )}
+        </div>
+        <button
+          data-tour="products-new"
+          onClick={() => handleOpenModal()}
+          className="flex items-center justify-center space-x-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md text-sm font-bold transition shrink-0 cursor-pointer"
+        >
+          <Plus size={18} />
+          <span>Nuevo Producto</span>
+        </button>
+      </section>
+
+      {/* Herramientas secundarias, separadas de los filtros del listado. */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-[#333333] dark:bg-[#1F1F1F]">
+        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Herramientas</p>
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setCountLines([]); setCountSearch(''); setCountOpen(true); }}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-emerald-500"
           >
             <ClipboardCheck size={15} />
             <span>Conteo</span>
           </button>
           <button
             onClick={handlePrintPriceList}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-emerald-500"
           >
             <ListOrdered size={15} />
             <span>Lista precios</span>
           </button>
           <button
-              onClick={() => setSuppliersOpen(true)}
-              className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
-            >
-              <Truck size={15} />
-              <span>Proveedores</span>
-            </button>
+            onClick={() => setSuppliersOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-emerald-500"
+          >
+            <Truck size={15} />
+            <span>Proveedores</span>
+          </button>
           <button
             onClick={() => { setLabelQty({}); setLabelsOpen(true); }}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-emerald-500"
           >
             <Tag size={15} />
             <span>Etiquetas</span>
           </button>
           <button
-              onClick={() => { setImportRows([]); setImportOpen(true); }}
-              className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer"
-            >
-              <Upload size={15} />
-              <span>Importar</span>
-            </button>
-          <button
-            data-tour="products-new"
-            onClick={() => handleOpenModal()}
-            className="flex items-center space-x-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-md text-sm font-bold transition shrink-0"
+            onClick={() => { setImportRows([]); setImportOpen(true); }}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-600 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-emerald-500"
           >
-            <Plus size={18} />
-            <span>Nuevo Producto</span>
+            <Upload size={15} />
+            <span>Importar</span>
           </button>
         </div>
-      </div>
-
-      <div data-tour="products-toolbar" className="bg-white dark:bg-[#1F1F1F] p-4 rounded-2xl shadow-sm border border-slate-200/80 dark:border-[#333333] flex items-center space-x-3">
-        <Search className="text-slate-400 shrink-0" size={20} />
-        <input
-          type="text"
-          placeholder="Buscar por nombre, código de barras o categoría..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full focus:outline-none text-slate-900 dark:text-white text-sm font-medium bg-transparent"
-        />
-        {searchTerm && (
-          <button onClick={() => setSearchTerm('')} className="text-xs font-bold text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer">✕</button>
-        )}
-      </div>
+      </section>
 
       {/* Barra única: filtros + herramientas */}
-      <div data-tour="products-filters" className="bg-white dark:bg-[#1F1F1F] rounded-2xl border border-slate-200/80 dark:border-[#333333] shadow-sm p-3 space-y-2.5">
+      <div data-tour="products-filters" className="bg-white dark:bg-[#1F1F1F] rounded-2xl border border-slate-200/80 dark:border-[#333333] shadow-sm p-3 sm:p-4 space-y-2.5">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Filtros</p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-[170px] flex-1 sm:flex-none sm:w-52">
             <RoundedSelect
@@ -1555,13 +1572,13 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           </div>
           <button
             onClick={() => setStockFilter((f) => (f === 'critical' ? 'all' : 'critical'))}
-            className={`px-3.5 py-2 rounded-2xl text-[13px] font-bold border-2 transition active:scale-95 cursor-pointer ${stockFilter === 'critical' ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 hover:border-red-300'}`}
+            className={`px-3.5 py-2 rounded-2xl text-[13px] font-bold border-2 transition active:scale-95 cursor-pointer ${stockFilter === 'critical' ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 hover:border-red-300 dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300'}`}
           >
             {stockFilter === 'critical' ? '🔴 Solo críticos ✓' : '⚪ Solo críticos'}
           </button>
           <button
             onClick={() => setExpiryFilter((f) => !f)}
-            className={`px-3.5 py-2 rounded-2xl text-[13px] font-bold border-2 transition active:scale-95 cursor-pointer ${expiryFilter ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 hover:border-amber-300'}`}
+            className={`px-3.5 py-2 rounded-2xl text-[13px] font-bold border-2 transition active:scale-95 cursor-pointer ${expiryFilter ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 hover:border-amber-300 dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300'}`}
           >
             {expiryFilter ? '⏳ Por vencer ✓' : '⏳ Por vencer'}
           </button>
@@ -1603,7 +1620,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
               <button
                 key={f.name}
                 onClick={() => applySavedFilter(f)}
-                className="group flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-[#eef6ff] text-slate-600 hover:text-[#0284c7] rounded-full text-[11px] font-bold transition cursor-pointer"
+                className="group flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-[#eef6ff] text-slate-600 hover:text-[#0284c7] rounded-full text-[11px] font-bold transition cursor-pointer dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-sky-400"
               >
                 {f.name}
                 <span onClick={(e) => { e.stopPropagation(); deleteSavedFilter(f.name); }} className="text-slate-400 hover:text-red-500 hidden group-hover:inline">✕</span>
@@ -1612,12 +1629,12 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           </div>
         )}
 
-        <div className="border-t border-slate-100" />
+        <div className="border-t border-slate-100 dark:border-[#333333]" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Precios y datos</p>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Precios</span>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-2xl">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Meta %</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-2xl dark:bg-white/5 dark:border-[#333333]">
+            <span className="text-[11px] font-bold text-slate-500 uppercase dark:text-slate-400">Meta %</span>
             <input
               type="number"
               value={targetMargin}
@@ -1649,7 +1666,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:block">Datos</span>
           <button
             onClick={() => setDupesOpen(true)}
-            className="relative px-3.5 py-2 bg-white border border-slate-200 hover:border-purple-400 text-slate-600 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer"
+            className="relative px-3.5 py-2 bg-white border border-slate-200 hover:border-purple-400 text-slate-600 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-purple-400"
           >
             🔍 Duplicados
             {dupeGroups.length > 0 && (
@@ -1660,13 +1677,13 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           </button>
           <button
             onClick={handleExportProducts}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-700 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-emerald-500 text-slate-700 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-200 dark:hover:border-emerald-500"
           >
             <Download size={15} /> Excel
           </button>
           <button
             onClick={() => setRotationDashOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-blue-400 text-slate-600 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:border-blue-400 text-slate-600 rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-blue-400"
           >
             <BarChart3 size={15} /> Rotación
           </button>
@@ -1687,7 +1704,7 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
           ) : (
             <button
               onClick={() => setShowSaveFilter(true)}
-              className="flex items-center gap-1 px-3 py-2 bg-white border border-slate-200 hover:border-[#0ea5e9] text-slate-500 hover:text-[#0ea5e9] rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 px-3 py-2 bg-white border border-slate-200 hover:border-[#0ea5e9] text-slate-500 hover:text-[#0ea5e9] rounded-2xl text-[13px] font-bold transition active:scale-95 cursor-pointer dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300 dark:hover:border-sky-500 dark:hover:text-sky-400"
             >
               <Bookmark size={14} /> Guardar filtro
             </button>
@@ -1696,16 +1713,17 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Listado</p>
         <div className="bg-white dark:bg-[#1F1F1F] rounded-xl border-2 border-[#e2e8f0] dark:border-[#333333] p-1 flex text-[13px] font-bold">
           <button
             onClick={() => setShowInactive(false)}
-            className={`px-4 py-1.5 rounded-lg transition active:scale-95 cursor-pointer ${!showInactive ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+            className={`px-4 py-1.5 rounded-lg transition active:scale-95 cursor-pointer ${!showInactive ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5'}`}
           >
             Activos ({activeProducts.length})
           </button>
           <button
             onClick={() => setShowInactive(true)}
-            className={`px-4 py-1.5 rounded-lg transition active:scale-95 cursor-pointer ${showInactive ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+            className={`px-4 py-1.5 rounded-lg transition active:scale-95 cursor-pointer ${showInactive ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5'}`}
           >
             Dados de baja ({inactiveProducts.length})
           </button>
@@ -2412,13 +2430,13 @@ export function ProductsView({ showToast, profile }: { showToast?: (msg: string,
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setAdjustMode('in')}
-                className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition active:scale-95 cursor-pointer ${adjustMode === 'in' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-[#e2e8f0] text-slate-600'}`}
+                className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition active:scale-95 cursor-pointer ${adjustMode === 'in' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300'}`}
               >
                 ➕ Entrada
               </button>
               <button
                 onClick={() => setAdjustMode('out')}
-                className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition active:scale-95 cursor-pointer ${adjustMode === 'out' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-[#e2e8f0] text-slate-600'}`}
+                className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition active:scale-95 cursor-pointer ${adjustMode === 'out' ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-[#e2e8f0] text-slate-600 dark:bg-[#232323] dark:border-[#333333] dark:text-slate-300'}`}
               >
                 ➖ Salida
               </button>
